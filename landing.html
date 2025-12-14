@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>PerformEdge</title>
+        <link rel="stylesheet" href="style.css">
+    </head>
+
+    <body>
+
+        <!-- NAVBAR -->
+        <header>
+            <nav>
+            <span class="brand">PerformEdge</span>
+            <div class="nav-links">
+                <a href="#home">Home</a>
+                <a href="#solution">Solution</a>
+                <a href="#features">Features</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#team">Team</a>
+                <a href="#contact">Contact</a>
+            </div>
+            </nav>
+        </header>
+
+        <!-- HERO -->
+        <section id="home">
+            <div class="hero-tagline">
+            <div class="hero-dot"></div>
+            HR Analytics Platform for Modern Teams
+            </div>
+
+            <h1>
+            Turn HR Data into<br />
+            <span>Clear, Actionable Insights</span>
+            </h1>
+
+            <p>
+            PerformEdge centralizes employee, attendance and performance data into one intuitive analytics
+            platform so HR, managers and leadership can make better decisions faster.
+            </p>
+
+            <div class="hero-actions">
+            <a href="#pricing" class="btn btn-primary">Get Started</a>
+            <a href="#solution" class="btn btn-outline">See How It Works</a>
+            </div>
+        </section>
+
+        <!-- WHO IT'S FOR -->
+        <section id="who">
+            <h2 class="section-title">Built for People Who Run HR</h2>
+            <p class="section-subtitle">
+            PerformEdge is designed to help teams who are tired of manual spreadsheets and disconnected systems.
+            </p>
+
+            <div class="row-3">
+            <div class="card">
+                <div class="pill">Primary Users</div>
+                <h3>HR Teams</h3>
+                <p>Human resources teams who manage employee data, attendance and performance reviews every day.</p>
+            </div>
+
+            <div class="card">
+                <div class="pill">Decision Makers</div>
+                <h3>Managers & Leads</h3>
+                <p>Department heads who want clarity on capacity, performance and attendance without waiting for reports.</p>
+            </div>
+
+            <div class="card">
+                <div class="pill">Leadership</div>
+                <h3>Executives</h3>
+                <p>Leadership teams who rely on accurate HR analytics to make strategic workforce decisions.</p>
+            </div>
+            </div>
+        </section>
+
+        <!-- PROBLEM -->
+        <section id="problem">
+            <h2 class="section-title">The Problem with HR Today</h2>
+            <p class="section-subtitle">
+            HR data is often scattered across multiple tools, emails and spreadsheets - making it hard to see the full picture
+            when you need it most.
+            </p>
+
+            <div class="row-3">
+            <div class="card">
+                <h3>Scattered Data</h3>
+                <p>Employee information, attendance records and performance summaries live in separate places.</p>
+            </div>
+            <div class="card">
+                <h3>Manual Reporting</h3>
+                <p>HR spends hours every week pulling data into spreadsheets and slide decks.</p>
+            </div>
+            <div class="card">
+                <h3>No Real-Time View</h3>
+                <p>By the time a report is ready, the data is already outdated or incomplete.</p>
+            </div>
+            </div>
+
+            <div class="row-3" style="margin-top: 24px;">
+            <div class="card">
+                <h3>Limited Insights</h3>
+                <p>It’s difficult to compare departments, locations or employee groups at a glance.</p>
+            </div>
+            <div class="card">
+                <h3>Errors & Inconsistency</h3>
+                <p>Copying data between files leads to mistakes that undermine trust in HR analytics.</p>
+            </div>
+            <div class="card">
+                <h3>Slow Decisions</h3>
+                <p>Leadership waits days for answers that should be available instantly.</p>
+            </div>
+            </div>
+        </section>
+
+        <!-- SOLUTION -->
+
+
+        <!-- FEATURES -->
+
+
+        <!-- WHY CHOOSE US -->
+        <section id="why">
+            <h2 class="section-title">Why Teams Choose PerformEdge</h2>
+            <p class="section-subtitle">
+            Not just another HR system - a focused analytics layer that makes your existing tools smarter.
+            </p>
+
+            <div class="row-2">
+            <div class="card">
+                <h3>Built for Analytics</h3>
+                <p>PerformEdge focuses on insights, not admin data entry. It sits on top of what you already use.</p>
+            </div>
+            <div class="card">
+                <h3>Fast Time to Value</h3>
+                <p>Start seeing useful dashboards and trends in days, not months.</p>
+            </div>
+            </div>
+
+            <div class="row-2" style="margin-top: 24px;">
+            <div class="card">
+                <h3>Designed for Non-Technical Users</h3>
+                <p>No SQL, no complex setup – just clear metrics and filters HR teams already understand.</p>
+            </div>
+            <div class="card">
+                <h3>Scales with Your Organization</h3>
+                <p>From small teams to multi-location organizations, PerformEdge grows with you.</p>
+            </div>
+            </div>
+        </section>
+
+        <!-- PRICING -->
+
+
+        <!-- TEAM -->
+
+
+        <!-- CONTACT -->
+
+
+    <!-- FOOTER -->
+    <footer>
+        © 2025 PerformEdge - HR Analytics Platform. All rights reserved.
+    </footer>
+
+     <div class="theme-toggle-container">
+        <button id="theme-toggle" class="theme-toggle-button">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white">
+                <path d="M12 3a9 9 0 109 9c0-.46-.04-.92-.12-1.35a6.836 6.836 0 01-8.52 8.52c.43.08.89.12 1.35.12V3z"/>
+            </svg>
+        </button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const toggleButton = document.getElementById('theme-toggle');
+            const body = document.body;
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'light') {
+                body.classList.add('light-mode');
+            }
+            toggleButton.addEventListener('click', () => {
+                const isLightMode = body.classList.toggle('light-mode');
+                if (isLightMode) {
+                    localStorage.setItem('theme', 'light');
+                } else {
+                    localStorage.setItem('theme', 'dark');
+                }
+            });
+        });
+    </script>
+
+    </body>
+</html>
