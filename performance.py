@@ -270,3 +270,57 @@ def _bucket(scale: List[Dict[str, Any]], score: int) -> Dict[str, Any]:
         if int(r["min_score"]) <= int(score) <= int(r["max_score"]):
             return r
     return {"rating_name": "Unrated", "color_hex": "#999999"}
+
+
+# Overview (used by /dashboard/performance)
+
+@router.get("/overview")
+def performance_overview(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None, alias="company_id"),
+    authorization: Optional[str] = Header(None),
+):
+    cid = _resolve_company_id(company_id, authorization)
+    dep_id = _resolve_department_id(cid, department)
+    loc_id = _resolve_location_id(cid, location)
+    cycle = _pick_cycle(cid, date_range)
+
+    # Ranking distribution
+
+    scale = _get_rating_scale(cid)
+    cycle_id = cycle["cycle_id"] if cycle else None
+
+    ranking_chart: List[Dict[str, Any]] = []
+    ranking_legend: List[Dict[str, Any]] = []
+
+    if cycle_id:
+        sql = """
+        SELECT pr.overall_score
+        FROM performance_reviews pr
+        JOIN employees e ON e.employee_id = pr.employee_id
+        WHERE e.company_id=%s
+          AND pr.cycle_id=%s
+          AND e.employement_status='ACTIVE'
+        """
+        params: List[Any] = [cid, cycle_id]
+        if dep_id:
+            sql += " AND e.department_id=%s"
+            params.append(dep_id)
+        if loc_id:
+            sql += " AND e.location_id=%s"
+            params.append(loc_id)
+        rows = _fetch_all(sql, tuple(params))
+
+        total = len(rows)
+        counts: Dict[str, int] = {r["rating_name"]: 0 for r in scale}
+        for r in rows:
+            b = _bucket(scale, int(r["overall_score"]))
+            if b["rating_name"] in counts:
+                counts[b["rating_name"]] += 1
+
+        for r in scale:
+            pct = round((counts[r["rating_name"]] / total) * 100) if total else 0
+            ranking_chart.append({"name": r["rating_name"], "value": pct, "color": r.get("color_hex") or "#999999"})
+            ranking_legend.append({"name": r["rating_name"], "value": pct})
