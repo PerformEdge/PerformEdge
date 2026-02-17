@@ -136,3 +136,72 @@ def employee_dashboard_overview(authorization: Optional[str] = Header(default=No
         "next_approved_leave": next_leave.isoformat() if next_leave else None,
         "by_type": leave_by_type,
     }
+
+    # Performance summary + trend
+
+    cur.execute(
+        """
+        SELECT
+            pr.review_id,
+            pr.cycle_id,
+            pc.name AS cycle_name,
+            pc.end_date,
+            pr.created_at AS review_date,
+            pr.overall_score,
+            pr.comments AS review_comments
+        FROM performance_reviews pr
+        JOIN performance_cycle pc ON pc.cycle_id = pr.cycle_id
+        WHERE pr.employee_id=%s
+        ORDER BY pc.end_date DESC, pr.created_at DESC
+        LIMIT 6
+        """,
+        (employee_id,),
+    )
+    perf_rows = cur.fetchall() or []
+
+    latest = perf_rows[0] if perf_rows else None
+    latest_score = float(latest["overall_score"]) if latest and latest.get("overall_score") is not None else None
+    latest_rating = _rating_for_score(company_id, latest_score)
+
+    trend: List[dict] = []
+    for r in reversed(perf_rows):
+        s = float(r["overall_score"]) if r.get("overall_score") is not None else None
+        trend.append(
+            {
+                "cycle_id": r.get("cycle_id"),
+                "cycle_name": r.get("cycle_name"),
+                "end_date": r.get("end_date").isoformat() if r.get("end_date") else None,
+                "score": s,
+                "rating": _rating_for_score(company_id, s),
+            }
+        )
+
+    criteria: List[dict] = []
+    if latest and latest.get("review_id"):
+        cur.execute(
+            """
+            SELECT c.criteria_name, s.score, c.weight AS max_score
+            FROM performance_scores s
+            JOIN performance_criteria c ON c.criteria_id = s.criteria_id
+            WHERE s.review_id=%s
+            ORDER BY c.criteria_name
+            """,
+            (latest["review_id"],),
+        )
+        for row in cur.fetchall() or []:
+            criteria.append(
+                {
+                    "criteria": row.get("criteria_name"),
+                    "score": float(row.get("score") or 0),
+                    "max_score": float(row.get("max_score") or 0),
+                }
+            )
+
+    performance = {
+        "latest_score": latest_score,
+        "latest_rating": latest_rating,
+        "latest_review_date": latest.get("review_date").isoformat() if latest and latest.get("review_date") else None,
+        "latest_comments": latest.get("review_comments") if latest else None,
+        "trend": trend,
+        "criteria": criteria,
+    }
