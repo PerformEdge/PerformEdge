@@ -1,0 +1,138 @@
+from datetime import date
+from typing import Any, List, Optional
+
+from fastapi import APIRouter, Header
+
+from database import get_database_connection
+from employee_common import _get_employee_id, _rating_for_score, _require_employee, _require_payload
+
+router = APIRouter(prefix="/employee", tags=["Employee Dashboard"])
+
+
+@router.get("/dashboard/overview")
+def employee_dashboard_overview(authorization: Optional[str] = Header(default=None)):
+    """Employee home dashboard.
+
+    Returns a compact set of widgets for the employee landing page:
+    - leave summary
+    - performance trend
+    - training summary
+    - new joiners + upcoming birthdays (company)
+    """
+
+    payload = _require_payload(authorization)
+    _require_employee(payload)
+
+    company_id = payload.get("company_id") or "C001"
+    employee_id = _get_employee_id(payload)
+
+    conn = get_database_connection()
+    cur = conn.cursor(dictionary=True)
+
+    # Employee basic profile
+    cur.execute(
+        """
+        SELECT
+            e.employee_id,
+            e.employee_code,
+            e.full_name,
+            d.department_name,
+            l.location_name,
+            e.join_date,
+            e.date_of_birth AS birth_date
+        FROM employees e
+        LEFT JOIN departments d ON d.department_id = e.department_id
+        LEFT JOIN locations l ON l.location_id = e.location_id
+        WHERE e.employee_id=%s
+        """,
+        (employee_id,),
+    )
+    employee = cur.fetchone() or {}
+
+    # Leave summary
+    entitlements = {
+        "Annual": 14,
+        "Sick": 7,
+        "Casual": 7,
+    }
+
+    # If an entitlements table exists, prefer DB-driven totals.
+    try:
+        cur.execute(
+            "SELECT leave_type, total_days FROM leave_entitlements WHERE employee_id=%s",
+            (employee_id,),
+        )
+        rows = cur.fetchall() or []
+        if rows:
+            entitlements = {r["leave_type"]: int(r["total_days"]) for r in rows}
+    except Exception:
+        # Keep defaults when the table is not present.
+        pass
+
+    today = date.today()
+    year_start = date(today.year, 1, 1)
+    year_end = date(today.year, 12, 31)
+
+    cur.execute(
+        """
+        SELECT leave_type, started_date AS start_date, end_date, leave_status
+        FROM leave_records
+        WHERE employee_id=%s
+          AND started_date BETWEEN %s AND %s
+        ORDER BY started_date DESC
+        """,
+        (employee_id, year_start, year_end),
+    )
+    leave_rows = cur.fetchall() or []
+
+    used_by_type: dict = {k: 0 for k in entitlements.keys()}
+    pending_count = 0
+    next_leave = None
+
+    for lr in leave_rows:
+        lt = lr.get("leave_type") or "Other"
+        status = (lr.get("leave_status") or "").upper()
+
+        # days
+        try:
+            days = (lr["end_date"] - lr["start_date"]).days + 1
+        except Exception:
+            days = 0
+
+        if status in {"APPROVED", "APPROVE", "APPROVED "}:
+            used_by_type[lt] = used_by_type.get(lt, 0) + max(days, 0)
+            if lr.get("start_date") and lr["start_date"] >= today:
+                if next_leave is None or lr["start_date"] < next_leave:
+                    next_leave = lr["start_date"]
+        elif status in {"PENDING"}:
+            pending_count += 1
+
+    leave_by_type: List[dict] = []
+    total_entitled = 0
+    total_used = 0
+
+    # include also any leave types used that are not in entitlements
+    for lt in sorted(set(list(entitlements.keys()) + list(used_by_type.keys()))):
+        total = int(entitlements.get(lt, 0))
+        used = int(used_by_type.get(lt, 0))
+        remaining = max(total - used, 0)
+        leave_by_type.append(
+            {
+                "leave_type": lt,
+                "total": total,
+                "used": used,
+                "remaining": remaining,
+            }
+        )
+        total_entitled += total
+        total_used += used
+
+    leave_summary = {
+        "year": today.year,
+        "total_entitled": total_entitled,
+        "used": total_used,
+        "remaining": max(total_entitled - total_used, 0),
+        "pending_requests": pending_count,
+        "next_approved_leave": next_leave.isoformat() if next_leave else None,
+        "by_type": leave_by_type,
+    }
