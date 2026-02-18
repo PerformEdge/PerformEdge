@@ -1,0 +1,153 @@
+from fastapi import APIRouter , Query, Header, HTTPException
+from typing import Optional, List
+from security import verify_token
+from fastapi.responses import FileResponse
+from datetime import date
+from database import get_database_connection
+
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import fonts
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
+
+import os
+
+router = APIRouter(prefix="/eim", tags=["Upcoming Birthdays"])
+
+# ============================================================
+# 🔐 COMPANY FROM TOKEN
+# ============================================================
+
+def _get_company_id(authorization: Optional[str]) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid token format")
+
+    payload = verify_token(parts[1])
+    company_id = payload.get("company_id")
+
+    if not company_id:
+        raise HTTPException(status_code=403, detail="Company ID missing in token")
+
+    return company_id
+
+
+
+# ---------------- MAIN DATA API ---------------- #
+
+@router.get("/upcoming-birthdays")
+def get_upcoming_birthdays(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    authorization: Optional[str] = Header(None),
+):
+    company_id = _get_company_id(authorization)
+
+    filters = []
+    params: List = [company_id]
+
+    # -------- DATE FILTER --------
+    if date_range:
+        try:
+            start_str, end_str = date_range.split(" to ")
+            filters.append("e.join_date BETWEEN %s AND %s")
+            params.extend([start_str.strip(), end_str.strip()])
+        except:
+            pass
+
+    # -------- DEPARTMENT FILTER --------
+    if department:
+        filters.append("e.department_id = %s")
+        params.append(department)
+
+    # -------- LOCATION FILTER --------
+    if location:
+        filters.append("e.location_id = %s")
+        params.append(location)
+
+    filter_sql = ""
+    if filters:
+        filter_sql = " AND " + " AND ".join(filters)
+
+    
+    conn = get_database_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    query = f"""
+    SELECT 
+        e.full_name AS name,
+        e.department_id,
+        e.date_of_birth
+    FROM employees e
+    WHERE e.company_id = %s
+      AND e.employement_status = 'ACTIVE'
+      AND e.date_of_birth IS NOT NULL
+      {filter_sql}
+    """
+    cursor.execute(query, params)
+    employees = cursor.fetchall()
+
+
+    # Get department names
+    dept_query = "SELECT department_id, department_name FROM departments"
+    cursor.execute(dept_query)
+    departments = {row['department_id']: row['department_name'] for row in cursor.fetchall()}
+
+    today = date.today()
+    results = []
+
+    for emp in employees:
+        dob = emp["date_of_birth"]
+        
+        # Get department name
+        dept_name = departments.get(emp["department_id"], "Unknown")
+
+        this_year_birthday = dob.replace(year=today.year)
+        if this_year_birthday < today:
+            this_year_birthday = dob.replace(year=today.year + 1)
+
+        days_left = (this_year_birthday - today).days
+
+        if 0 <= days_left <= 30:
+
+            if days_left <= 7:
+                tag = "This Week"
+            elif days_left <= 14:
+                tag = "Soon"
+            else:
+                tag = "Next Month"
+
+            results.append({
+                "name": emp["name"],
+                "department": dept_name,
+                "birthday": this_year_birthday.strftime("%Y-%m-%d"),
+                "days_left": f"{days_left} days",
+                "tag": tag
+            })
+
+    results.sort(key=lambda x: int(x["days_left"].split()[0]))
+
+    highlights = [
+        {
+            "name": r["name"],
+            "department": r["department"],
+            "date": r["birthday"]
+        }
+        for r in results[:3]
+    ]
+
+    cursor.close()
+    conn.close()
+
+    return {
+        "highlights": highlights,
+        "table": results
+    }
