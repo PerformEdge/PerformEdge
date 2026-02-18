@@ -71,3 +71,31 @@ def _get_employee_id(payload: Dict[str, Any]) -> str:
     return str(row["employee_id"])
 
 
+def _rating_for_score(company_id: str, score: Optional[float]) -> Optional[str]:
+    """Map numeric score to rating label using performance_rating_scale."""
+
+    if score is None:
+        return None
+
+    conn = get_database_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute(
+        """
+        SELECT rating_name, min_score, max_score
+        FROM performance_rating_scale
+        WHERE company_id=%s
+        ORDER BY min_score DESC
+        """,
+        (company_id,),
+    )
+    rows = cur.fetchall() or []
+    conn.close()
+
+    for r in rows:
+        try:
+            if float(r["min_score"]) <= float(score) <= float(r["max_score"]):
+                return r["rating_name"]
+        except Exception:
+            continue
+
+    return None
