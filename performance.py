@@ -324,3 +324,37 @@ def performance_overview(
             pct = round((counts[r["rating_name"]] / total) * 100) if total else 0
             ranking_chart.append({"name": r["rating_name"], "value": pct, "color": r.get("color_hex") or "#999999"})
             ranking_legend.append({"name": r["rating_name"], "value": pct})
+
+    # Training needs
+    
+    train_sql = """
+      SELECT tc.category_name, tc.color_hex, COUNT(*) AS cnt
+      FROM training_requests tr
+      JOIN training_categories tc ON tc.category_id = tr.category_id
+      JOIN employees e ON e.employee_id = tr.employee_id
+      WHERE tr.company_id=%s
+        AND e.employement_status='ACTIVE'
+    """
+    train_params: List[Any] = [cid]
+    dr = _parse_date_range(date_range)
+    if dr:
+        start, end = dr
+        train_sql += " AND DATE(tr.requested_at) BETWEEN %s AND %s"
+        train_params.extend([start, end])
+    if dep_id:
+        train_sql += " AND e.department_id=%s"
+        train_params.append(dep_id)
+    if loc_id:
+        train_sql += " AND e.location_id=%s"
+        train_params.append(loc_id)
+    train_sql += " GROUP BY tc.category_name, tc.color_hex ORDER BY cnt DESC"
+    trows = _fetch_all(train_sql, tuple(train_params))
+    total_req = sum(int(r["cnt"]) for r in trows) if trows else 0
+    training_bars = [
+        {
+            "name": r["category_name"],
+            "value": round((int(r["cnt"]) / total_req) * 100) if total_req else 0,
+            "color": r.get("color_hex") or "#999999",
+        }
+        for r in trows
+    ]
