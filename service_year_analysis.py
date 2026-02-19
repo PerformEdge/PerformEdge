@@ -10,9 +10,8 @@ import io
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
-# ============================================================
 # 🔐 COMPANY RESOLUTION (SECURE)
-# ============================================================
+
 
 def _get_company_id(authorization: Optional[str]) -> str:
     if not authorization:
@@ -31,9 +30,8 @@ def _get_company_id(authorization: Optional[str]) -> str:
     return company_id
 
 
-# ============================================================
-# 📊 BUSINESS LOGIC (REUSABLE FUNCTION)
-# ============================================================
+# BUSINESS LOGIC (REUSABLE FUNCTION)
+
 
 def _get_service_year_data(
     company_id: str,
@@ -69,7 +67,7 @@ def _get_service_year_data(
         filters_sql += " AND e.location_id = %s "
         params.append(location)
 
-    # ================= DISTRIBUTION =================
+    #  DISTRIBUTION 
     cursor.execute(f"""
         SELECT label, COUNT(*) AS value
         FROM (
@@ -97,7 +95,7 @@ def _get_service_year_data(
 
     chart_rows = cursor.fetchall()
 
-    # ================= LOYALTY INDEX =================
+    #  LOYALTY INDEX 
     cursor.execute(f"""
         SELECT
             ROUND(
@@ -112,7 +110,7 @@ def _get_service_year_data(
 
     loyalty_index = cursor.fetchone()["loyalty"] or 0
 
-    # ================= TOP LONG SERVING =================
+    # TOP LONG SERVING 
     cursor.execute(f"""
         SELECT
             e.full_name AS name,
@@ -125,7 +123,7 @@ def _get_service_year_data(
 
     top_long_serving = cursor.fetchall()
 
-    # ================= STAFF TABLE =================
+    #  STAFF TABLE 
     cursor.execute(f"""
         SELECT
             e.full_name AS name,
@@ -152,10 +150,7 @@ def _get_service_year_data(
         "staff": staff,
     }
 
-
-# ============================================================
-# 📊 API ENDPOINT
-# ============================================================
+#  API ENDPOINT
 
 @router.get("/service-year-analysis")
 def service_year_analysis(
@@ -172,4 +167,70 @@ def service_year_analysis(
         department=department,
         location=location,
     )
+
+
+#  PDF GENERATOR
+
+   
+def _pdf_make(
+    *,
+    title: str,
+    subtitle: str = "",
+    filters: Optional[Dict[str, str]] = None,
+    lines: Optional[List[str]] = None,
+) -> io.BytesIO:
+    """Create a simple PDF (in-memory) and return a BytesIO buffer."""
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    width, height = letter
+
+    margin_x = 48
+    margin_bottom = 72
+    y = height - 56
+
+    # ---- Title ----
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(margin_x, y, title)
+    y -= 22
+
+    # ---- Subtitle ----
+    if subtitle:
+        c.setFont("Helvetica", 10)
+        c.drawString(margin_x, y, subtitle)
+        y -= 18
+
+    # ---- Filters ----
+    if filters:
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(margin_x, y, "Filters")
+        y -= 14
+
+        c.setFont("Helvetica", 10)
+        for k, v in filters.items():
+            if y < margin_bottom:
+                c.showPage()
+                y = height - 56
+                c.setFont("Helvetica", 10)
+
+            c.drawString(margin_x, y, f"{k}: {v}")
+            y -= 13
+
+        y -= 6
+
+    # ---- Content ----
+    c.setFont("Helvetica", 10)
+
+    for line in (lines or []):
+        if y < margin_bottom:
+            c.showPage()
+            y = height - 56
+            c.setFont("Helvetica", 10)
+
+        c.drawString(margin_x, y, str(line))
+        y -= 13
+
+    c.save()
+    buf.seek(0)
+    return buf
 
