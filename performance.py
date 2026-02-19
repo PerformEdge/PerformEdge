@@ -358,3 +358,223 @@ def performance_overview(
         }
         for r in trows
     ]
+
+    # Appraisals completion
+
+    app_sql = """
+      SELECT pa.status
+      FROM performance_appraisals pa
+      JOIN employees e ON e.employee_id = pa.employee_id
+      WHERE pa.company_id=%s
+        AND e.employement_status='ACTIVE'
+    """
+    app_params: List[Any] = [cid]
+    if cycle_id:
+        app_sql += " AND pa.cycle_id=%s"
+        app_params.append(cycle_id)
+    if dep_id:
+        app_sql += " AND e.department_id=%s"
+        app_params.append(dep_id)
+    if loc_id:
+        app_sql += " AND e.location_id=%s"
+        app_params.append(loc_id)
+    arows = _fetch_all(app_sql, tuple(app_params))
+    total_a = len(arows)
+    completed = sum(1 for r in arows if (r.get("status") or "").upper() == "COMPLETED")
+    pending = total_a - completed
+    completed_pct = round((completed / total_a) * 100) if total_a else 0
+    pending_pct = round((pending / total_a) * 100) if total_a else 0
+
+    due_text = ""
+    if cycle and cycle.get("end_date"):
+        due_text = f"Due date: {cycle['end_date']}"
+
+    # Overview stat cards (used by the overview page + PDF report).
+
+    scores = [int(r.get("overall_score") or 0) for r in rows]
+    avg_score = round(sum(scores) / len(scores)) if scores else 0
+
+    excellent_names = {"excellent", "outstanding"}
+    excellent_bucket = None
+    for r in scale:
+        if (r.get("rating_name") or "").lower() in excellent_names:
+            excellent_bucket = r.get("rating_name")
+            break
+    if not excellent_bucket and scale:
+        excellent_bucket = scale[0].get("rating_name")  
+
+    bucketed = [_bucket(scale, s).get("rating_name") for s in scores]
+    excellence_rate = round((bucketed.count(excellent_bucket) / len(bucketed)) * 100) if bucketed else 0
+
+    needs_improvement = sum(
+        1
+        for s in scores
+        if (_bucket(scale, s).get("rating_name") or "").lower()
+        in {"needs improvement", "need improvement", "unrated"}
+    )
+    top_performers = sum(1 for s in scores if s >= 90)
+
+    overview_stats = {
+        "averageScore": avg_score,
+        "excellenceRate": excellence_rate,
+        "needsImprovement": needs_improvement,
+        "topPerformers": top_performers,
+    }
+
+    return {
+        "stats": overview_stats,
+        "ranking_chart": ranking_chart,
+        "training_bars": training_bars,
+        "appraisals_chart": [
+            {"name": "Completed", "value": completed_pct, "color": "#3C9A5F"},
+            {"name": "Pending", "value": pending_pct, "color": "#E0A84B"},
+        ],
+
+        "ranking": {
+            "title": "Performance Ranking Distribution",
+            "subtitle": "Grouped by appraisal results",
+            "chart": ranking_chart,
+            "legend": ranking_legend,
+        },
+        "training": {
+            "title": "Training Needs Distribution",
+            "subtitle": "Percentage of employees recommended/requested training",
+            "bars": training_bars,
+            "tip": "Tip: use this to plan monthly training sessions focused on the largest needs.",
+        },
+        "appraisals": {
+            "title": "Appraisal Completion Status",
+            "subtitle": "Track completion of performance appraisals",
+            "chart": [
+                {"name": "Completed", "value": completed_pct, "color": "#3C9A5F"},
+                {"name": "Pending", "value": pending_pct, "color": "#E0A84B"},
+            ],
+            "meta": {
+                "completedLabel": f"Completed — {completed_pct}% ({completed})",
+                "pendingLabel": f"Pending — {pending_pct}% ({pending})",
+                "actionText": "Action: send reminders to pending employees and managers.",
+                "dueText": due_text or "Due date: -",
+            },
+        },
+        "_debug": {  
+            "company_id": cid,
+            "cycle_id": cycle_id,
+            "department_id": dep_id,
+            "location_id": loc_id,
+            "location": location,
+        },
+    }
+
+    # 1) Ranking Distribution (page)
+
+    @router.get("/ranking")
+    def performance_ranking(
+        date_range: str = Query("", alias="dateRange"),
+        department: str = Query("", alias="department"),
+        location: str = Query("", alias="location"),
+        company_id: Optional[str] = Query(None, alias="company_id"),
+        authorization: Optional[str] = Header(None),
+    ):
+        cid = _resolve_company_id(company_id, authorization)
+        dep_id = _resolve_department_id(cid, department)
+        loc_id = _resolve_location_id(cid, location)
+        cycle = _pick_cycle(cid, date_range)
+        if not cycle:
+            return {
+                "stats": {"averageScore": 0, "excellenceRate": 0, "needsImprovement": 0, "topPerformers": 0},
+                "chart": [],
+                "employees": [],
+            }
+
+        scale = _get_rating_scale(cid)
+
+        sql = """
+        SELECT e.full_name, d.department_name, pr.overall_score
+        FROM performance_reviews pr
+        JOIN employees e ON e.employee_id = pr.employee_id
+        LEFT JOIN departments d ON d.department_id = e.department_id
+        WHERE e.company_id=%s
+            AND pr.cycle_id=%s
+            AND e.employement_status='ACTIVE'
+        """
+        params: List[Any] = [cid, cycle["cycle_id"]]
+        if dep_id:
+            sql += " AND e.department_id=%s"
+            params.append(dep_id)
+        if loc_id:
+            sql += " AND e.location_id=%s"
+            params.append(loc_id)
+
+        rows = _fetch_all(sql, tuple(params))
+        if not rows:
+            return {
+                "stats": {"averageScore": 0, "excellenceRate": 0, "needsImprovement": 0, "topPerformers": 0},
+                "chart": [],
+                "employees": [],
+            }
+
+        scores = [int(r["overall_score"]) for r in rows]
+        avg_score = round(sum(scores) / len(scores)) if scores else 0
+
+        excellent_names = {"excellent", "outstanding"}
+        excellent_bucket = None
+        for r in scale:
+            if (r["rating_name"] or "").lower() in excellent_names:
+                excellent_bucket = r["rating_name"]
+                break
+        if not excellent_bucket and scale:
+            excellent_bucket = scale[0]["rating_name"] 
+
+        bucketed = [_bucket(scale, s)["rating_name"] for s in scores]
+        excellence_rate = round((bucketed.count(excellent_bucket) / len(bucketed)) * 100) if bucketed else 0
+
+        needs_improvement = sum(
+            1
+            for s in scores
+            if _bucket(scale, s)["rating_name"].lower() in {"needs improvement", "need improvement", "unrated"}
+        )
+        top_performers = sum(1 for s in scores if s >= 90)
+
+        # Distribution in %
+        counts: Dict[str, int] = {r["rating_name"]: 0 for r in scale}
+        for s in scores:
+            name = _bucket(scale, s)["rating_name"]
+            if name in counts:
+                counts[name] += 1
+
+        distribution: List[Dict[str, Any]] = []
+        total = len(scores)
+        for r in scale:
+            pct = round((counts[r["rating_name"]] / total) * 100) if total else 0
+            distribution.append({"name": r["rating_name"], "value": pct, "color": r.get("color_hex") or "#999999"})
+
+        employees = []
+        for r in rows:
+            rating = _bucket(scale, int(r["overall_score"]))["rating_name"]
+            employees.append(
+                {
+                    "name": r["full_name"],
+                    "department": r.get("department_name") or "-",
+                    "percentage": int(r["overall_score"]),
+                    "rating": rating,
+                }
+            )
+        employees.sort(key=lambda x: x["percentage"], reverse=True)
+
+        return {
+            "stats": {
+                "averageScore": avg_score,
+                "excellenceRate": excellence_rate,
+                "needsImprovement": needs_improvement,
+                "topPerformers": top_performers,
+            },
+            "chart": distribution,
+            "employees": employees,
+            "_debug": {
+                "company_id": cid,
+                "cycle_id": cycle["cycle_id"],
+                "department_id": dep_id,
+                "location_id": loc_id,
+                "location": location,
+            },
+        }
