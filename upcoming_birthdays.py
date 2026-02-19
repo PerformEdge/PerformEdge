@@ -151,3 +151,59 @@ def get_upcoming_birthdays(
         "highlights": highlights,
         "table": results
     }
+
+
+# ---------------- PDF DOWNLOAD API ---------------- #
+
+@router.get("/upcoming-birthdays/report")
+def download_upcoming_birthdays_report(
+    authorization: Optional[str] = Header(None),
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+):
+    data = get_upcoming_birthdays(
+        date_range=date_range,
+        department=department,
+        location=location,
+        authorization=authorization
+    )
+
+
+    file_path = "upcoming_birthdays_report.pdf"
+    doc = SimpleDocTemplate(file_path)
+
+    elements = []
+    styles = getSampleStyleSheet()
+
+    elements.append(Paragraph("Upcoming Birthdays Report", styles["Title"]))
+    elements.append(Spacer(1, 0.5 * inch))
+
+    table_data = [["Name", "Department", "Birthday", "Days Left", "Tag"]]
+
+    for row in data["table"]:
+        table_data.append([
+            row["name"],
+            row["department"],
+            row["birthday"],
+            row["days_left"],
+            row["tag"]
+        ])
+
+    table = Table(table_data, repeatRows=1)
+
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ("ALIGN", (3, 1), (3, -1), "CENTER"),
+    ]))
+
+    elements.append(table)
+    doc.build(elements)
+
+    return FileResponse(
+        path=file_path,
+        filename="Upcoming_Birthdays_Report.pdf",
+        media_type="application/pdf"
+    )
