@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import io
+import re
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
@@ -30,7 +31,23 @@ def _get_company_id(authorization: Optional[str]) -> str:
     return company_id
 
 
-# BUSINESS LOGIC (REUSABLE FUNCTION)
+def _parse_date_range(date_range: str) -> Optional[List[str]]:
+    if not date_range:
+        return None
+
+    parts = re.split(r"\s+to\s+|\.\.", date_range.strip())
+    if len(parts) != 2:
+        return None
+
+    start_str, end_str = parts[0].strip(), parts[1].strip()
+    if not start_str or not end_str:
+        return None
+
+    return [start_str, end_str]
+
+
+
+#  LOGIC (REUSABLE FUNCTION)
 
 
 def _get_service_year_data(
@@ -50,12 +67,10 @@ def _get_service_year_data(
 
     # DATE FILTER
     if date_range:
-        try:
-            start_str, end_str = date_range.split(" to ")
+        parsed_range = _parse_date_range(date_range)
+        if parsed_range:
             filters_sql += " AND e.join_date BETWEEN %s AND %s "
-            params.extend([start_str.strip(), end_str.strip()])
-        except:
-            pass
+            params.extend(parsed_range)
 
     # DEPARTMENT FILTER
     if department:
@@ -110,7 +125,7 @@ def _get_service_year_data(
 
     loyalty_index = cursor.fetchone()["loyalty"] or 0
 
-    # TOP LONG SERVING 
+    #  TOP LONG SERVING 
     cursor.execute(f"""
         SELECT
             e.full_name AS name,
@@ -150,6 +165,7 @@ def _get_service_year_data(
         "staff": staff,
     }
 
+
 #  API ENDPOINT
 
 @router.get("/service-year-analysis")
@@ -169,9 +185,9 @@ def service_year_analysis(
     )
 
 
+
 #  PDF GENERATOR
 
-   
 def _pdf_make(
     *,
     title: str,
@@ -234,3 +250,53 @@ def _pdf_make(
     buf.seek(0)
     return buf
 
+
+#  REPORT ENDPOINT
+
+
+@router.get("/service-year-analysis/report")
+def service_year_analysis_report(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    authorization: Optional[str] = Header(None),
+):
+    company_id = _get_company_id(authorization)
+
+    data = _get_service_year_data(
+        company_id=company_id,
+        date_range=date_range,
+        department=department,
+        location=location,
+    )
+    filters = {
+        "Date Range": date_range or "All Time", 
+        "Department": department or "All Departments",
+        "Location": location or "All Locations",
+    }
+
+    lines = [
+        f"Loyalty Index: {data['loyalty_index']}%",
+        "",
+        "Service Year Distribution:",
+    ]
+
+    for label, value in zip(data["chart"]["labels"], data["chart"]["values"]):
+        lines.append(f"- {label}: {value} years")
+
+    lines.append("")
+    lines.append("Top Long-Serving Employees:")
+
+    for emp in data["top_long_serving"]:
+        lines.append(f"- {emp['name']} ({emp['years']} yrs)")
+    
+    for emp in data["staff"]:
+        lines.append(f"- {emp['name']} | {emp['department']} | {emp['years']} ")
+
+    buf = _pdf_make(title="Service Year Analysis Report", filters=filters, lines=lines)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=service_year_analysis_report.pdf"},
+    )
