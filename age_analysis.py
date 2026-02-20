@@ -179,3 +179,127 @@ def age_analysis(
     finally:
         cursor.close()
         conn.close()
+
+
+# ============================================================
+# 📄 PDF GENERATOR
+# ============================================================
+
+def _pdf_make(
+    *,
+    title: str,
+    subtitle: str = "",
+    filters: Optional[Dict[str, str]] = None,
+    lines: Optional[List[str]] = None,
+) -> io.BytesIO:
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    width, height = letter
+
+    x = 48
+    y = height - 56
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(x, y, title)
+    y -= 22
+
+    if subtitle:
+        c.setFont("Helvetica", 10)
+        c.drawString(x, y, subtitle)
+        y -= 18
+
+    if filters:
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(x, y, "Filters")
+        y -= 14
+        c.setFont("Helvetica", 10)
+
+        for k, v in filters.items():
+            if y < 72:
+                c.showPage()
+                y = height - 56
+            c.drawString(x, y, f"{k}: {v}")
+            y -= 13
+
+        y -= 6
+
+    c.setFont("Helvetica", 10)
+
+    for line in (lines or []):
+        if y < 72:
+            c.showPage()
+            y = height - 56
+            c.setFont("Helvetica", 10)
+        c.drawString(x, y, str(line))
+        y -= 13
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+def _pdf_response(filename: str, buf: io.BytesIO) -> StreamingResponse:
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )
+
+
+# ============================================================
+# 📥 REPORT ENDPOINT
+# ============================================================
+
+@router.get("/age-analysis/report")
+def age_analysis_report(
+     date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
+):
+
+    data = age_analysis(
+        department=department,
+        location=location,
+        date_range=date_range,
+        company_id=company_id,
+        authorization=authorization,
+    )
+
+    distribution = data.get("distribution", [])
+    employees = data.get("table", [])
+
+    filters = {
+        "Department": department or "All",
+    }
+
+    lines: List[str] = [
+        "Age Distribution Summary",
+        "",
+    ]
+
+    for item in distribution:
+        lines.append(
+            f"{item['label']} → Total: {item['total']} | "
+            f"Male: {item['male']} | Female: {item['female']}"
+        )
+
+    lines.extend(["", "Employee List (first 100)"])
+
+    for emp in employees[:100]:
+        lines.append(
+            f"- {emp['name']} | Age: {emp['age']} | {emp['department']}"
+        )
+
+    buf = _pdf_make(
+        title="Age Analysis Report",
+        subtitle=f"Generated on {date.today().isoformat()}",
+        filters=filters,
+        lines=lines,
+    )
+
+    return _pdf_response("age_analysis_report.pdf", buf)
