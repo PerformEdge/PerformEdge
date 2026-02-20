@@ -788,3 +788,97 @@ def training_needs(
             "dateRange": date_range,
         },
     }
+
+# 3) Appraisals Completion (page)
+
+@router.get("/appraisals")
+def appraisals_completion(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None, alias="company_id"),
+    authorization: Optional[str] = Header(None),
+):
+    cid = _resolve_company_id(company_id, authorization)
+    dep_id = _resolve_department_id(cid, department)
+    loc_id = _resolve_location_id(cid, location)
+    cycle = _pick_cycle(cid, date_range)
+    cycle_id = cycle["cycle_id"] if cycle else None
+
+    base_sql = """
+      SELECT
+        e.full_name AS name,
+        d.department_name AS department,
+        pa.status,
+        pr.overall_score
+      FROM performance_appraisals pa
+      JOIN employees e ON e.employee_id = pa.employee_id
+      LEFT JOIN departments d ON d.department_id = e.department_id
+      LEFT JOIN performance_reviews pr
+        ON pr.employee_id = pa.employee_id AND pr.cycle_id = pa.cycle_id
+      WHERE pa.company_id=%s
+        AND e.employement_status='ACTIVE'
+    """
+    params: List[Any] = [cid]
+    if cycle_id:
+        base_sql += " AND pa.cycle_id=%s"
+        params.append(cycle_id)
+    if dep_id:
+        base_sql += " AND e.department_id=%s"
+        params.append(dep_id)
+    if loc_id:
+        base_sql += " AND e.location_id=%s"
+        params.append(loc_id)
+
+    rows = _fetch_all(base_sql, tuple(params))
+
+    total = len(rows)
+    completed = sum(1 for r in rows if (r.get("status") or "").upper() == "COMPLETED")
+    pending = total - completed
+    completion_rate = round((completed / total) * 100) if total else 0
+
+    chart = [
+        {"name": "Completed", "value": round((completed / total) * 100) if total else 0, "color": "#3C9A5F"},
+        {"name": "Pending", "value": round((pending / total) * 100) if total else 0, "color": "#E0A84B"},
+    ]
+
+    # Table rows
+    out_rows: List[Dict[str, Any]] = []
+    for r in rows:
+        status = (r.get("status") or "PENDING").upper()
+        if status == "COMPLETED":
+            pct = 100
+        else:
+            # if score exists but status not completed, treat as "in progress"
+            pct = 50 if r.get("overall_score") is not None else 20
+            status = "IN PROGRESS" if pct == 50 else "PENDING"
+
+        out_rows.append(
+            {
+                "name": r.get("name") or "-",
+                "department": r.get("department") or "-",
+                "status": status.title(),
+                "score": int(r["overall_score"]) if r.get("overall_score") is not None else None,
+                "completionPct": pct,
+            }
+        )
+
+    return {
+        "stats": {
+            "totalEmployees": total,
+            "appraisalsCompleted": completed,
+            "pendingAppraisals": pending,
+            "completionRate": completion_rate,
+        },
+        "chart": chart,
+        "rows": out_rows,
+        "_debug": {
+            "company_id": cid,
+            "cycle_id": cycle_id,
+            "department_id": dep_id,
+            "location_id": loc_id,
+            "location": location,
+            "dateRange": date_range,
+        },
+    }
+
