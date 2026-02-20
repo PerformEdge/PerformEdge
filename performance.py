@@ -570,7 +570,7 @@ def performance_overview(
             },
             "chart": distribution,
             "employees": employees,
-            "_debug": {
+            "_debug": { 
                 "company_id": cid,
                 "cycle_id": cycle["cycle_id"],
                 "department_id": dep_id,
@@ -578,3 +578,213 @@ def performance_overview(
                 "location": location,
             },
         }
+
+# 2) Training Needs (page)
+
+@router.get("/training")
+def training_needs(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None, alias="company_id"),
+    authorization: Optional[str] = Header(None),
+):
+    cid = _resolve_company_id(company_id, authorization)
+    dep_id = _resolve_department_id(cid, department)
+    loc_id = _resolve_location_id(cid, location)
+    dr = _parse_date_range(date_range)
+
+    # total employees
+    emp_sql = "SELECT COUNT(*) AS total FROM employees WHERE company_id=%s AND employement_status='ACTIVE'"
+    emp_params: List[Any] = [cid]
+    if dep_id:
+        emp_sql += " AND department_id=%s"
+        emp_params.append(dep_id)
+    if loc_id:
+        emp_sql += " AND location_id=%s"
+        emp_params.append(loc_id)
+    total_emp = int(_fetch_one(emp_sql, tuple(emp_params))["total"])
+
+    # category counts
+    req_sql = """
+      SELECT tc.category_name, tc.color_hex, COUNT(*) AS cnt
+      FROM training_requests tr
+      JOIN training_categories tc ON tc.category_id = tr.category_id
+      JOIN employees e ON e.employee_id = tr.employee_id
+      WHERE tr.company_id=%s
+        AND e.employement_status='ACTIVE'
+    """
+    req_params: List[Any] = [cid]
+    if dr:
+        start, end = dr
+        req_sql += " AND DATE(tr.requested_at) BETWEEN %s AND %s"
+        req_params.extend([start, end])
+    if dep_id:
+        req_sql += " AND e.department_id=%s"
+        req_params.append(dep_id)
+    if loc_id:
+        req_sql += " AND e.location_id=%s"
+        req_params.append(loc_id)
+    req_sql += " GROUP BY tc.category_name, tc.color_hex ORDER BY cnt DESC"
+    rows = _fetch_all(req_sql, tuple(req_params))
+
+    total_req = sum(int(r["cnt"]) for r in rows) if rows else 0
+    bars = [
+        {
+            "name": r["category_name"],
+            "value": round((int(r["cnt"]) / total_req) * 100) if total_req else 0,
+            "color": r.get("color_hex") or "#999999",
+        }
+        for r in rows
+    ]
+
+    employees_need_training = 0
+    if total_req:
+        distinct_sql = """
+          SELECT COUNT(DISTINCT tr.employee_id) AS cnt
+          FROM training_requests tr
+          JOIN employees e ON e.employee_id = tr.employee_id
+          WHERE tr.company_id=%s
+            AND e.employement_status='ACTIVE'
+        """
+        dparams: List[Any] = [cid]
+        if dr:
+            start, end = dr
+            distinct_sql += " AND DATE(tr.requested_at) BETWEEN %s AND %s"
+            dparams.extend([start, end])
+        if dep_id:
+            distinct_sql += " AND e.department_id=%s"
+            dparams.append(dep_id)
+        if loc_id:
+            distinct_sql += " AND e.location_id=%s"
+            dparams.append(loc_id)
+        employees_need_training = int(_fetch_one(distinct_sql, tuple(dparams))["cnt"])
+
+    top_category = rows[0]["category_name"] if rows else None
+
+    approved_sql = """
+      SELECT
+        SUM(CASE WHEN tr.status='APPROVED' THEN 1 ELSE 0 END) AS approved,
+        COUNT(*) AS total
+      FROM training_requests tr
+      JOIN employees e ON e.employee_id = tr.employee_id
+      WHERE tr.company_id=%s
+        AND e.employement_status='ACTIVE'
+    """
+    aparams: List[Any] = [cid]
+    if dr:
+        start, end = dr
+        approved_sql += " AND DATE(tr.requested_at) BETWEEN %s AND %s"
+        aparams.extend([start, end])
+    if dep_id:
+        approved_sql += " AND e.department_id=%s"
+        aparams.append(dep_id)
+    if loc_id:
+        approved_sql += " AND e.location_id=%s"
+        aparams.append(loc_id)
+    ap = _fetch_one(approved_sql, tuple(aparams))
+    avg_completion = 0
+    if ap and ap["total"]:
+        avg_completion = round((int(ap["approved"]) / int(ap["total"])) * 100)
+
+    table_sql = """
+      SELECT
+        e.employee_id,
+        e.full_name AS name,
+        d.department_name AS department,
+        tc.category_name AS category,
+        COUNT(*) AS cnt
+      FROM training_requests tr
+      JOIN employees e ON e.employee_id = tr.employee_id
+      LEFT JOIN departments d ON d.department_id = e.department_id
+      JOIN training_categories tc ON tc.category_id = tr.category_id
+      WHERE tr.company_id=%s
+        AND e.employement_status='ACTIVE'
+    """
+    tparams: List[Any] = [cid]
+    if dr:
+        start, end = dr
+        table_sql += " AND DATE(tr.requested_at) BETWEEN %s AND %s"
+        tparams.extend([start, end])
+    if dep_id:
+        table_sql += " AND e.department_id=%s"
+        tparams.append(dep_id)
+    if loc_id:
+        table_sql += " AND e.location_id=%s"
+        tparams.append(loc_id)
+    table_sql += " GROUP BY e.employee_id, tc.category_id ORDER BY e.full_name ASC"
+    trows = _fetch_all(table_sql, tuple(tparams))
+
+    def norm_cat(name: str) -> str:
+        n = (name or "").strip().lower()
+        if n in {"technical", "tech"}:
+            return "technical"
+        if n in {"soft skills", "softskills", "soft"}:
+            return "softSkills"
+        if n in {"leadership"}:
+            return "leadership"
+        if n in {"compliance"}:
+            return "compliance"
+        return "other"
+
+    emp_map: Dict[str, Dict[str, Any]] = {}
+    for r in trows:
+        eid = r["employee_id"]
+        if eid not in emp_map:
+            emp_map[eid] = {
+                "name": r["name"],
+                "department": r.get("department") or "-",
+                "technical": 0,
+                "softSkills": 0,
+                "leadership": 0,
+                "compliance": 0,
+            }
+        key = norm_cat(r["category"])
+        if key in emp_map[eid]:
+            emp_map[eid][key] += int(r["cnt"])
+
+    table: List[Dict[str, Any]] = []
+    for emp in emp_map.values():
+        total = emp["technical"] + emp["softSkills"] + emp["leadership"] + emp["compliance"]
+        if total <= 0:
+            continue
+        # Convert category request counts into integer percentages that sum to 100.
+        cats = ["technical", "softSkills", "leadership", "compliance"]
+        raw = [(emp[c] / total) * 100 for c in cats]
+        floors = [int(x) for x in raw]
+        remainders = [raw[i] - floors[i] for i in range(len(cats))]
+
+        remaining = 100 - sum(floors)
+        if remaining > 0:
+            for i in sorted(range(len(cats)), key=lambda i: remainders[i], reverse=True)[:remaining]:
+                floors[i] += 1
+
+        table.append(
+            {
+                "name": emp["name"],
+                "department": emp["department"],
+                "technical": floors[0],
+                "softSkills": floors[1],
+                "leadership": floors[2],
+                "compliance": floors[3],
+                "total": 100,
+            }
+        )
+
+    return {
+        "stats": {
+            "totalEmployees": total_emp,
+            "employeesNeedTraining": employees_need_training,
+            "topTrainingCategory": top_category,
+            "avgTrainingCompletion": avg_completion,
+        },
+        "bars": bars,
+        "table": table,
+        "_debug": {
+            "company_id": cid,
+            "department_id": dep_id,
+            "location_id": loc_id,
+            "location": location,
+            "dateRange": date_range,
+        },
+    }
