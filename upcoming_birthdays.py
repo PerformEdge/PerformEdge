@@ -4,6 +4,7 @@ from security import verify_token
 from fastapi.responses import FileResponse
 from datetime import date
 from database import get_database_connection
+import re
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
@@ -39,6 +40,21 @@ def _get_company_id(authorization: Optional[str]) -> str:
     return company_id
 
 
+def _parse_date_range(date_range: str) -> Optional[List[str]]:
+    if not date_range:
+        return None
+
+    parts = re.split(r"\s+to\s+|\.\.", date_range.strip())
+    if len(parts) != 2:
+        return None
+
+    start_str, end_str = parts[0].strip(), parts[1].strip()
+    if not start_str or not end_str:
+        return None
+
+    return [start_str, end_str]
+
+
 
 # ---------------- MAIN DATA API ---------------- #
 
@@ -56,12 +72,10 @@ def get_upcoming_birthdays(
 
     # -------- DATE FILTER --------
     if date_range:
-        try:
-            start_str, end_str = date_range.split(" to ")
+        parsed_range = _parse_date_range(date_range)
+        if parsed_range:
             filters.append("e.join_date BETWEEN %s AND %s")
-            params.extend([start_str.strip(), end_str.strip()])
-        except:
-            pass
+            params.extend(parsed_range)
 
     # -------- DEPARTMENT FILTER --------
     if department:
