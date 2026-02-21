@@ -212,5 +212,98 @@ def staff_analysis(
     finally:
         cursor.close()
         conn.close()
+        
+
+#  PDF GENERATOR
 
 
+def _pdf_make(title: str, filters: Dict[str, str], lines: List[str]) -> io.BytesIO:
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    width, height = letter
+
+    x = 50
+    y = height - 60
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(x, y, title)
+    y -= 25
+
+    c.setFont("Helvetica", 10)
+
+    for k, v in filters.items():
+        c.drawString(x, y, f"{k}: {v}")
+        y -= 15
+
+    y -= 10
+
+    for line in lines:
+        if y < 70:
+            c.showPage()
+            y = height - 60
+            c.setFont("Helvetica", 10)
+        c.drawString(x, y, line)
+        y -= 14
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+def _pdf_response(filename: str, buf: io.BytesIO):
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+
+#  REPORT DOWNLOAD ENDPOINT
+
+
+@router.get("/staff-analysis/report")
+def staff_analysis_report(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    authorization: Optional[str] = Header(None),
+):
+
+    data = staff_analysis(
+        date_range=date_range,
+        department=department,
+        location=location,
+        authorization=authorization,
+    )
+
+    filters = {
+        "Date Range": date_range or "All",
+        "Department": department or "All",
+        "Location": location or "All",
+    }
+
+    lines = [
+        f"Total Staff: {data['kpis']['total_staff']}",
+        f"New Joiners: {data['kpis']['new_joiners']}",
+        f"Resigned Staff: {data['kpis']['resigned_staff']}",
+        "",
+        "Trend (New Joiners): " + ", ".join(map(str, data["trend"]["new_joiners"])),
+        "Trend (Resigned): " + ", ".join(map(str, data["trend"]["resigned"])),"",
+        
+    ]
+    
+    for nj in data["new_joiners_list"]:
+        lines.append(f"New Joiner: {nj['name']} ({nj['department']}) - {nj['date']}")       
+        
+    for r in data["resigned_list"]:
+        lines.append(f"Resigned: {r['name']} ({r['department']}) - {r['date']}")        
+
+    buf = _pdf_make(
+        "Staff Analysis Report",
+        filters,
+        lines
+    )
+
+    return _pdf_response("staff_analysis_report.pdf", buf)
