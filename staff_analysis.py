@@ -85,3 +85,132 @@ def staff_analysis(
         params.append(location)
 
     today = date.today()
+    
+    try:
+     # KPIs 
+
+        cursor.execute(f"""
+            SELECT COUNT(*) AS total
+            FROM employees e
+            WHERE e.employement_status = 'ACTIVE'
+            {filters_sql}
+        """, params)
+        total_staff = cursor.fetchone()["total"] or 0
+
+        cursor.execute(f"""
+            SELECT COUNT(*) AS new_joiners
+            FROM employees e
+            WHERE YEAR(e.join_date) = YEAR(%s)
+            {filters_sql}
+        """, [today] + params)
+        new_joiners = cursor.fetchone()["new_joiners"] or 0
+
+        cursor.execute(f"""
+            SELECT COUNT(*) AS resigned
+            FROM employees e
+            WHERE e.employement_status = 'RESIGNED'
+            {filters_sql}
+        """, params)
+        resigned_staff = cursor.fetchone()["resigned"] or 0
+
+        cursor.execute(f"""
+            SELECT COUNT(*) AS pending
+            FROM employment_contract ec
+            LEFT JOIN employees e ON ec.employee_id = e.employee_id
+            WHERE ec.is_current = 0
+            {filters_sql}
+        """, params)
+        pending_recruit = cursor.fetchone()["pending"] or 0
+        
+        # TREND 
+
+        cursor.execute(f"""
+            SELECT MONTH(e.join_date) AS month, COUNT(*) AS count
+            FROM employees e
+            WHERE YEAR(e.join_date) = YEAR(%s)
+            {filters_sql}
+            GROUP BY MONTH(e.join_date)
+            ORDER BY MONTH(e.join_date)
+        """, [today] + params)
+        joiner_rows = cursor.fetchall()
+
+        cursor.execute(f"""
+            SELECT MONTH(e.retired_date) AS month, COUNT(*) AS count
+            FROM employees e
+            WHERE e.employement_status = 'RESIGNED'
+              AND YEAR(e.retired_date) = YEAR(%s)
+            {filters_sql}
+            GROUP BY MONTH(e.retired_date)
+            ORDER BY MONTH(e.retired_date)
+        """, [today] + params)
+        resigned_rows = cursor.fetchall()
+
+        months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+
+        joiners_map = {r["month"]: r["count"] for r in joiner_rows}
+        resigned_map = {r["month"]: r["count"] for r in resigned_rows}
+
+        trend = {
+            "months": months,
+            "new_joiners": [joiners_map.get(i + 1, 0) for i in range(12)],
+            "resigned": [resigned_map.get(i + 1, 0) for i in range(12)],
+        }
+
+        # DISTRIBUTION 
+
+        current_staff = total_staff - resigned_staff
+
+        distribution = {
+            "new_joiners": new_joiners,
+            "current_staff": current_staff,
+            "resigned": resigned_staff,
+        }
+
+        # NEW JOINERS LIST 
+
+        cursor.execute(f"""
+            SELECT e.full_name AS name,
+                   d.department_name AS department,
+                   e.join_date AS date
+            FROM employees e
+            LEFT JOIN departments d ON e.department_id = d.department_id
+            WHERE e.employement_status = 'NEW_JOINER'
+            {filters_sql}
+            ORDER BY e.join_date DESC
+            LIMIT 5
+        """, params)
+        new_joiners_list = cursor.fetchall()
+
+        # RESIGNED LIST 
+
+        cursor.execute(f"""
+            SELECT e.full_name AS name,
+                   d.department_name AS department,
+                   e.retired_date AS date
+            FROM employees e
+            LEFT JOIN departments d ON e.department_id = d.department_id
+            WHERE e.employement_status = 'RESIGNED'
+            {filters_sql}
+            ORDER BY e.retired_date DESC
+            LIMIT 5
+        """, params)
+        resigned_list = cursor.fetchall()
+
+        return {
+            "kpis": {
+                "total_staff": total_staff,
+                "new_joiners": new_joiners,
+                "resigned_staff": resigned_staff,
+                "pending_recruit": pending_recruit,
+            },
+            "trend": trend,
+            "distribution": distribution,
+            "new_joiners_list": new_joiners_list,
+            "resigned_list": resigned_list,
+        }
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
