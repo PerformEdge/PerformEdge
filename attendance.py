@@ -46,6 +46,15 @@ def attendance_summary(
             WHERE ar.date_of_attendance BETWEEN %s AND %s
             """ + filter_sql, tuple(base_params))
         kpis_row = cur.fetchone()
+
+        # Convert to proper numbers
+        kpis = {
+            "present": int(kpis_row["present"] or 0),
+            "late": int(kpis_row["late"] or 0),
+            "on_leave": int(kpis_row["on_leave"] or 0),
+            "overtime": 0  
+        }
+
         finally:
         cur.close()
         conn.close()
