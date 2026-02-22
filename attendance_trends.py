@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException, Query
+from datetime import datetime, timedelta
 from typing import Optional
 
 from database import get_database_connection
+from attendance_location import _pdf_make, _pdf_response
 from date_utils import resolve_date_range
 
 router = APIRouter(prefix="/attendance-trends", tags=["Attendance Trends"])
@@ -33,3 +35,14 @@ def absentee_last_5_days(start: Optional[str] = Query(None), end: Optional[str] 
     finally:
         cur.close()
         conn.close()
+
+# --- Download Report for Attendance Trends ---
+@router.get("/report")
+def attendance_trends_report(
+    start: Optional[str] = Query(None),
+    end: Optional[str] = Query(None),
+    dateRange: Optional[str] = Query(None, alias="dateRange"),
+    department: Optional[str] = Query(None),
+    location: Optional[str] = Query(None),
+):
+    """Download a PDF report for Attendance Trends."""
