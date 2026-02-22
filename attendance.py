@@ -55,6 +55,28 @@ def attendance_summary(
             "overtime": 0  
         }
 
+        # Late Comers by Department
+        # Late comers by department with optional filters
+        params = [start_date, end_date]
+        late_filter = ""
+        if department and department != "All":
+            late_filter += " AND d.department_name = %s"
+            params.append(department)
+        if location and location != "All":
+            late_filter += " AND l.location_name = %s"
+            params.append(location)
+
+        cur.execute(f"""
+            SELECT d.department_name, COUNT(*) AS late_count
+            FROM attendance_records ar
+            JOIN attendance_status_type ast ON ast.status_id=ar.status_id
+            JOIN employees e ON e.employee_id=ar.employee_id
+            JOIN departments d ON d.department_id=e.department_id
+            LEFT JOIN locations l ON l.location_id = e.location_id
+            WHERE ast.status_name='Late' AND ar.date_of_attendance BETWEEN %s AND %s
+            """ + late_filter + " GROUP BY d.department_id, d.department_name ORDER BY late_count DESC", tuple(params))
+        late = cur.fetchall()
+
         finally:
         cur.close()
         conn.close()
