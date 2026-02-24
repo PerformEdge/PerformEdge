@@ -229,7 +229,7 @@ def _pdf_response(filename: str, buf: io.BytesIO):
 
 
 # ============================================================
-# 📥 REPORT ENDPOINT
+#  REPORT ENDPOINT
 # ============================================================
 
 @router.get("/category-distribution/report")

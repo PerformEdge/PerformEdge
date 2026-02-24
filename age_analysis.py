@@ -59,7 +59,7 @@ def _parse_date_range(date_range: str) -> Optional[List[str]]:
 
 
 # ============================================================
-# 📊 MAIN ENDPOINT
+#  MAIN ENDPOINT
 # ============================================================
 
 @router.get("/age-analysis")
@@ -182,7 +182,7 @@ def age_analysis(
 
 
 # ============================================================
-# 📄 PDF GENERATOR
+#  PDF GENERATOR
 # ============================================================
 
 def _pdf_make(
@@ -250,7 +250,7 @@ def _pdf_response(filename: str, buf: io.BytesIO) -> StreamingResponse:
 
 
 # ============================================================
-# 📥 REPORT ENDPOINT
+#  REPORT ENDPOINT
 # ============================================================
 
 @router.get("/age-analysis/report")
