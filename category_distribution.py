@@ -13,7 +13,7 @@ router = APIRouter(prefix="/eim", tags=["EIM"])
 
 
 # ============================================================
-# 🔐 COMPANY FROM TOKEN
+#  COMPANY FROM TOKEN
 # ============================================================
 
 def _get_company_id(authorization: Optional[str]) -> str:
@@ -49,7 +49,7 @@ def _parse_date_range(date_range: str) -> Optional[List[str]]:
 
 
 # ============================================================
-# 📊 CATEGORY DISTRIBUTION
+#  CATEGORY DISTRIBUTION
 # ============================================================
 
 @router.get("/category-distribution")
@@ -149,7 +149,7 @@ def category_distribution(
 
         employees = cursor.fetchall()
 
-        # 🔥 IMPORTANT: Always return labels & values
+        #  IMPORTANT: Always return labels & values
         return {
             "labels": ["Academic", "Administrative"],
             "values": [academic, administrative],
@@ -164,7 +164,7 @@ def category_distribution(
 
 
 # ============================================================
-# 📄 PDF GENERATOR
+# PDF GENERATOR
 # ============================================================
 
 def _pdf_make(title: str, 

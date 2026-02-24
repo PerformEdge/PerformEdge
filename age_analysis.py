@@ -12,7 +12,7 @@ from reportlab.lib.pagesizes import letter
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
 # ============================================================
-# 🔐 COMPANY RESOLUTION
+#  COMPANY RESOLUTION
 # ============================================================
 
 def _company_id_from_token(authorization: Optional[str]) -> Optional[str]:
