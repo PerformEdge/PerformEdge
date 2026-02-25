@@ -98,6 +98,26 @@ def attendance_summary(
             """ + nopay_filter + " GROUP BY d.department_id, d.department_name ORDER BY no_pay_count DESC", tuple(params))
         no_pay = cur.fetchall()
 
+        # Absentees by Day (Last 5 days) - using Absent status
+        params = [start_date, end_date]
+        absentee_filter = ""
+        if department and department != "All":
+            absentee_filter += " AND e.department_id = (SELECT department_id FROM departments WHERE department_name = %s LIMIT 1)"
+            params.append(department)
+        if location and location != "All":
+            absentee_filter += " AND e.location_id = (SELECT location_id FROM locations WHERE location_name = %s LIMIT 1)"
+            params.append(location)
+
+        cur.execute(f"""
+            SELECT ar.date_of_attendance AS day, COUNT(*) AS absent_count
+            FROM attendance_records ar
+            JOIN attendance_status_type ast ON ast.status_id=ar.status_id
+            JOIN employees e ON e.employee_id = ar.employee_id
+            WHERE ast.status_name='Absent'
+              AND ar.date_of_attendance BETWEEN %s AND %s
+            """ + absentee_filter + " GROUP BY ar.date_of_attendance ORDER BY ar.date_of_attendance DESC LIMIT 5", tuple(params))
+        absentee = cur.fetchall()
+
         finally:
         cur.close()
         conn.close()
