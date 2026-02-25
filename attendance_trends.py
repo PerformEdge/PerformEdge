@@ -94,3 +94,39 @@ def attendance_trends_report(
         lines=lines,
     )
     return _pdf_response("attendance_trends_report.pdf", buf)
+
+# --- Avg absentee by department ---
+@router.get("/avg-by-department")
+def avg_absentee_by_dept(start: Optional[str] = Query(None), end: Optional[str] = Query(None), dateRange: Optional[str] = Query(None, alias="dateRange"), department: Optional[str] = Query(None)):
+    """Get average absentee rate by department"""
+    start_date, end_date = resolve_date_range(date_range=dateRange, start=start, end=end, default_days=7)
+    
+    conn = get_database_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        query = """
+            SELECT d.department_name AS dept,
+                   COUNT(DISTINCT ar.employee_id) AS total_employees,
+                   ROUND(SUM(CASE WHEN ast.status_name='Absent' THEN 1 ELSE 0 END) 
+                         / COUNT(*) * 100, 1) AS rate
+            FROM attendance_records ar
+            JOIN employees e ON e.employee_id = ar.employee_id
+            JOIN departments d ON d.department_id = e.department_id
+            JOIN attendance_status_type ast ON ast.status_id = ar.status_id
+            WHERE ar.date_of_attendance BETWEEN %s AND %s
+        """
+        params = [start_date, end_date]
+        
+        if department:
+            query += " AND d.department_name = %s"
+            params.append(department)
+        
+        query += " GROUP BY d.department_name ORDER BY rate DESC"
+        
+        cur.execute(query, params)
+        return cur.fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        cur.close()
+        conn.close()
