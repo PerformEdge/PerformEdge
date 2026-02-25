@@ -77,6 +77,27 @@ def attendance_summary(
             """ + late_filter + " GROUP BY d.department_id, d.department_name ORDER BY late_count DESC", tuple(params))
         late = cur.fetchall()
 
+        # No Pay (Absent) by Department - using Absent as no pay indicator
+        params = [start_date, end_date]
+        nopay_filter = ""
+        if department and department != "All":
+            nopay_filter += " AND d.department_name = %s"
+            params.append(department)
+        if location and location != "All":
+            nopay_filter += " AND l.location_name = %s"
+            params.append(location)
+
+        cur.execute(f"""
+            SELECT d.department_name, COUNT(*) AS no_pay_count
+            FROM attendance_records ar
+            JOIN attendance_status_type ast ON ast.status_id=ar.status_id
+            JOIN employees e ON e.employee_id=ar.employee_id
+            JOIN departments d ON d.department_id=e.department_id
+            LEFT JOIN locations l ON l.location_id = e.location_id
+            WHERE ast.status_name='Absent' AND ar.date_of_attendance BETWEEN %s AND %s
+            """ + nopay_filter + " GROUP BY d.department_id, d.department_name ORDER BY no_pay_count DESC", tuple(params))
+        no_pay = cur.fetchall()
+
         finally:
         cur.close()
         conn.close()
