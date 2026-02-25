@@ -118,6 +118,36 @@ def attendance_summary(
             """ + absentee_filter + " GROUP BY ar.date_of_attendance ORDER BY ar.date_of_attendance DESC LIMIT 5", tuple(params))
         absentee = cur.fetchall()
 
+        # Attendance by Location
+        params = [start_date, end_date]
+        loc_filter = ""
+        if department and department != "All":
+            loc_filter += " AND e.department_id = (SELECT department_id FROM departments WHERE department_name = %s LIMIT 1)"
+            params.append(department)
+        if location and location != "All":
+            loc_filter += " AND l.location_name = %s"
+            params.append(location)
+
+        cur.execute(f"""
+            SELECT l.location_name, 
+              SUM(CASE WHEN ast.status_name='Present' THEN 1 ELSE 0 END) AS present,
+              SUM(CASE WHEN ast.status_name='Absent' THEN 1 ELSE 0 END) AS absent
+            FROM attendance_records ar
+            JOIN attendance_status_type ast ON ast.status_id = ar.status_id
+            JOIN employees e ON e.employee_id=ar.employee_id
+            JOIN locations l ON l.location_id=e.location_id
+            WHERE ar.date_of_attendance BETWEEN %s AND %s
+            """ + loc_filter + " GROUP BY l.location_id, l.location_name ORDER BY l.location_name", tuple(params))
+        locations = cur.fetchall()
+
+        return {
+            "kpis": kpis,
+            "late": late,
+            "no_pay": no_pay,
+            "absentee": absentee,
+            "locations": locations
+        }
+
         finally:
         cur.close()
         conn.close()
