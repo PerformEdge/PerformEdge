@@ -168,3 +168,135 @@ def location_wise_staff_distribution(
         cursor.close()
         conn.close()
 
+
+
+#  PDF GENERATOR
+
+
+def _pdf_make(
+    *,
+    title: str,
+    subtitle: str = "",
+    filters: Optional[Dict[str, str]] = None,
+    lines: Optional[List[str]] = None,
+) -> io.BytesIO:
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    width, height = letter
+
+    x = 48
+    y = height - 56
+
+    # Title
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(x, y, title)
+    y -= 22
+
+    # Subtitle
+    if subtitle:
+        c.setFont("Helvetica", 10)
+        c.drawString(x, y, subtitle)
+        y -= 18
+
+    # Filters
+    if filters:
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(x, y, "Filters")
+        y -= 14
+        c.setFont("Helvetica", 10)
+
+        for k, v in filters.items():
+            if y < 72:
+                c.showPage()
+                y = height - 56
+            c.drawString(x, y, f"{k}: {v}")
+            y -= 13
+
+        y -= 6
+
+    # Content
+    c.setFont("Helvetica", 10)
+
+    for line in (lines or []):
+        if y < 72:
+            c.showPage()
+            y = height - 56
+            c.setFont("Helvetica", 10)
+        c.drawString(x, y, str(line))
+        y -= 13
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+def _pdf_response(filename: str, buf: io.BytesIO) -> StreamingResponse:
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )
+
+
+
+#  REPORT ENDPOINT
+
+
+@router.get("/location-wise-staff/report")
+def location_wise_staff_report(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
+):
+
+    data = location_wise_staff_distribution(
+        date_range=date_range,
+        department=department,
+        location=location,
+        company_id=company_id,
+        authorization=authorization,
+    )
+
+    chart = data.get("chart", [])
+    employees = data.get("employees", [])
+    kpis = data.get("kpis", {})
+
+    filters = {
+        "Date Range": date_range or "All",
+        "Department": department or "All",
+        "Location": location or "All",
+    }
+
+    lines: List[str] = [
+        "Summary",
+        f"Total Staff: {kpis.get('total_staff', 0)}",
+        f"Total Locations: {kpis.get('total_locations', 0)}",
+        f"Location with Max Staff: {kpis.get('max_location', '-')}",
+        f"Location with Min Staff: {kpis.get('min_location', '-')}",
+        "",
+        "Location Distribution",
+    ]
+
+    for item in chart:
+        lines.append(f"- {item.get('location')}: {item.get('count')} staff")
+
+    lines.extend(["", "Employee List (first 100)"])
+
+    for emp in employees[:100]:
+        lines.append(
+            f"- {emp.get('name')} | {emp.get('department')} | {emp.get('location')}"
+        )
+
+    buf = _pdf_make(
+        title="Location-wise Staff Distribution",
+        subtitle=f"Generated on {date.today().isoformat()}",
+        filters=filters,
+        lines=lines,
+    )
+
+    return _pdf_response("location_wise_staff_report.pdf", buf)
