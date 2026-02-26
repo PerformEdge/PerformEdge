@@ -130,3 +130,66 @@ def avg_absentee_by_dept(start: Optional[str] = Query(None), end: Optional[str] 
     finally:
         cur.close()
         conn.close()
+
+# --- Daily absentee by department ---
+@router.get("/daily-by-department")
+def daily_absentee_by_dept(start: Optional[str] = Query(None), end: Optional[str] = Query(None), dateRange: Optional[str] = Query(None, alias="dateRange"), department: Optional[str] = Query(None)):
+    """Get daily absentee trends by department"""
+    start_date, end_date = resolve_date_range(date_range=dateRange, start=start, end=end, default_days=7)
+    
+    conn = get_database_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        query = """
+            SELECT d.department_name AS dept,
+                   ar.date_of_attendance,
+                   DAYNAME(ar.date_of_attendance) AS day,
+                   COUNT(*) AS absent
+            FROM attendance_records ar
+            JOIN employees e ON e.employee_id = ar.employee_id
+            JOIN departments d ON d.department_id = e.department_id
+            JOIN attendance_status_type ast ON ast.status_id = ar.status_id
+            WHERE ast.status_name='Absent'
+              AND ar.date_of_attendance BETWEEN %s AND %s
+        """
+        params = [start_date, end_date]
+        
+        if department:
+            query += " AND d.department_name = %s"
+            params.append(department)
+        
+        query += " GROUP BY d.department_name, ar.date_of_attendance ORDER BY d.department_name, ar.date_of_attendance"
+        
+        cur.execute(query, params)
+        rows = cur.fetchall()
+
+        # Transform to frontend structure
+        depts = {}
+        days_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        for r in rows:
+            dept = r["dept"]
+            day_short = r["day"][:3]
+            if dept not in depts:
+                depts[dept] = {d: 0 for d in days_order}
+            depts[dept][day_short] = r["absent"]
+
+        datasets = []
+        colors = ["#ef4444", "#f87171", "#fb923c", "#dc2626", "#ea580c", "#a16207", "#7c2d12"]
+        for idx, (dept, data) in enumerate(depts.items()):
+            datasets.append({
+                "label": dept,
+                "data": [data[d] for d in days_order[:5]],
+                "borderColor": colors[idx % len(colors)],
+                "backgroundColor": colors[idx % len(colors)] + "20",
+                "fill": True,
+                "tension": 0.35,
+                "pointRadius": 4,
+                "borderWidth": 3,
+            })
+
+        return {"labels": days_order[:5], "datasets": datasets}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        cur.close()
+        conn.close()
