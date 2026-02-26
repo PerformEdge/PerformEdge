@@ -51,3 +51,65 @@ def _require_auth(authorization: Optional[str]) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     return payload
+
+
+@router.get("")
+def search(
+    query: str = Query("", alias="query"),
+    limit: int = Query(20, ge=1, le=50, alias="limit"),
+    company_id: Optional[str] = Query(None, alias="company_id"),
+    authorization: Optional[str] = Header(None),
+):
+    """Global search used by the top search bar.
+
+    For now, we search employees (name, email, employee_code).
+    """
+
+    _require_auth(authorization)
+    # Default to the company in the JWT so search results stay scoped
+    # to the logged-in organisation (Manager/Employee).
+    if not company_id:
+        company_id = _company_id_from_token(authorization)
+
+    q = (query or "").strip()
+    if not q:
+        return {"query": q, "employees": []}
+
+    like = f"%{q}%"
+
+    base_sql = """
+        SELECT
+          e.employee_id,
+          e.full_name AS name,
+          e.employee_code,
+          u.email,
+          d.department_name AS department,
+          l.location_name AS location,
+          jr.role_name AS role
+        FROM employees e
+        LEFT JOIN users u ON u.user_id = e.user_id
+        LEFT JOIN departments d ON d.department_id = e.department_id
+        LEFT JOIN locations l ON l.location_id = e.location_id
+        LEFT JOIN job_roles jr ON jr.job_role_id = e.job_role_id
+        WHERE e.employement_status='ACTIVE'
+          AND (
+            e.full_name LIKE %s
+            OR u.email LIKE %s
+            OR e.employee_code LIKE %s
+          )
+        ORDER BY e.full_name ASC
+        LIMIT %s
+    """
+
+    params: List[Any] = [like, like, like, limit]
+    if company_id:
+        # Optional scoping when explicitly requested.
+        base_sql = base_sql.replace(
+            "WHERE e.employement_status='ACTIVE'",
+            "WHERE e.company_id=%s AND e.employement_status='ACTIVE'",
+        )
+        params = [company_id, like, like, like, limit]
+
+    rows = _fetch_all(base_sql, tuple(params))
+
+    return {"query": q, "employees": rows}
