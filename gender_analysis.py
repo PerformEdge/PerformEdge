@@ -140,3 +140,56 @@ def get_gender_analysis(
         "total": total,
         "employees": employees
     }
+
+# ==============================
+# DOWNLOAD PDF REPORT
+# ==============================
+
+@router.get("/gender-analysis/report")
+def download_gender_report(
+    company_id: str = Query(...),
+    department_id: str = Query(None)
+):
+    data = get_gender_analysis(company_id, department_id)
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    elements = []
+
+    title_style = ParagraphStyle(name="Title", fontSize=16)
+    elements.append(Paragraph("Gender Analysis Report", title_style))
+    elements.append(Spacer(1, 0.3 * inch))
+
+    elements.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ParagraphStyle(name="Normal")))
+    elements.append(Spacer(1, 0.3 * inch))
+
+    elements.append(Paragraph(f"Total Employees: {data['total']}", ParagraphStyle(name="Normal")))
+    elements.append(Paragraph(f"Male %: {data['summary']['male']}%", ParagraphStyle(name="Normal")))
+    elements.append(Paragraph(f"Female %: {data['summary']['female']}%", ParagraphStyle(name="Normal")))
+    elements.append(Spacer(1, 0.4 * inch))
+
+    table_data = [["Name", "Department", "Gender"]]
+
+    for emp in data["employees"]:
+        table_data.append([
+            emp["full_name"],
+            emp["department_name"],
+            emp["gender"]
+        ])
+
+    table = Table(table_data)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+    ]))
+
+    elements.append(table)
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=gender_analysis_report.pdf"}
+    )
