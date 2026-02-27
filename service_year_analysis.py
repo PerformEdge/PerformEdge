@@ -11,7 +11,7 @@ import re
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
-# 🔐 COMPANY RESOLUTION (SECURE)
+#  COMPANY RESOLUTION (SECURE)
 
 
 def _get_company_id(authorization: Optional[str]) -> str:
@@ -46,8 +46,7 @@ def _parse_date_range(date_range: str) -> Optional[List[str]]:
     return [start_str, end_str]
 
 
-
-#  LOGIC (REUSABLE FUNCTION)
+#  BUSINESS LOGIC (REUSABLE FUNCTION)
 
 
 def _get_service_year_data(
@@ -125,7 +124,7 @@ def _get_service_year_data(
 
     loyalty_index = cursor.fetchone()["loyalty"] or 0
 
-    #  TOP LONG SERVING 
+    # TOP LONG SERVING 
     cursor.execute(f"""
         SELECT
             e.full_name AS name,
@@ -138,7 +137,7 @@ def _get_service_year_data(
 
     top_long_serving = cursor.fetchall()
 
-    #  STAFF TABLE 
+    #  STAFF TABLE
     cursor.execute(f"""
         SELECT
             e.full_name AS name,
@@ -166,7 +165,9 @@ def _get_service_year_data(
     }
 
 
+
 #  API ENDPOINT
+
 
 @router.get("/service-year-analysis")
 def service_year_analysis(
@@ -188,6 +189,7 @@ def service_year_analysis(
 
 #  PDF GENERATOR
 
+   
 def _pdf_make(
     *,
     title: str,
@@ -249,7 +251,6 @@ def _pdf_make(
     c.save()
     buf.seek(0)
     return buf
-
 
 #  REPORT ENDPOINT
 
