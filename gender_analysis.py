@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict
-from fastapi import APIRouter, Query, Header, HTTPException
+from fastapi import APIRouter, HTTPException, Header, Query
 from fastapi.responses import StreamingResponse
 from database import get_database_connection
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -18,60 +18,63 @@ import re
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 
+
 router = APIRouter(prefix="/eim", tags=["Gender Analysis"])
 
+
 # ============================================================
-#  COMPANY RESOLUTION
+# 🔐 COMPANY RESOLUTION
 # ============================================================
 
 def _company_id_from_token(authorization: Optional[str]) -> Optional[str]:
     if not authorization:
         return None
-    
+
     parts = authorization.split()
 
     if len(parts) == 2 and parts[0].lower() == "bearer":
         payload = verify_token(parts[1])
         return payload.get("company_id")
-    
+
     return None
 
+
 def _resolve_company_id(
-        company_id_query: Optional[str],
-        authorization: Optional[str],
+    company_id_query: Optional[str],
+    authorization: Optional[str],
 ) -> str:
-    
-    # 1. Query override (testing only)
+
+    # 1️⃣ Query override (testing only)
     if company_id_query:
         return company_id_query
-    
-    # 2️. From JWT token
+
+    # 2️⃣ From JWT token
     cid = _company_id_from_token(authorization)
     if cid:
         return cid
-    
-    # 3️. No company → reject
-    raise HTTPException(status_code=401, details="Company not resolved")
+
+    # 3️⃣ No company → reject
+    raise HTTPException(status_code=401, detail="Company not resolved")
+
 
 def _parse_date_range(date_range: str) -> Optional[List[str]]:
     if not date_range:
         return None
-    
+
     parts = re.split(r"\s+to\s+|\.\.", date_range.strip())
     if len(parts) != 2:
         return None
-    
+
     start_str, end_str = parts[0].strip(), parts[1].strip()
     if not start_str or not end_str:
         return None
-    
+
     return [start_str, end_str]
 
 
 # ==============================
 # GET DATA
 # ==============================
-
 
 @router.get("/gender-analysis")
 def get_gender_analysis(
@@ -140,6 +143,7 @@ def get_gender_analysis(
         "total": total,
         "employees": employees
     }
+
 
 # ==============================
 # DOWNLOAD PDF REPORT
