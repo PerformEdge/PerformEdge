@@ -101,3 +101,64 @@ def get_kpis(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- 7-day attendance trend ---
+@router.get("/trend7days")
+def trend_7days(dateRange: Optional[str] = Query("", alias="dateRange"), start: Optional[str] = Query(None), end: Optional[str] = Query(None), location: Optional[str] = Query(None)):
+    try:
+        # resolve date range if provided; default to past 7 days
+        if start and end:
+            try:
+                start_date = datetime.strptime(start.strip(), "%Y-%m-%d").date()
+                end_date = datetime.strptime(end.strip(), "%Y-%m-%d").date()
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid start/end format. Use YYYY-MM-DD")
+        elif dateRange:
+            parts = re.split(r"\s+to\s+|\s+-\s+", dateRange)
+            if len(parts) >= 2:
+                try:
+                    start_date = datetime.strptime(parts[0].strip(), "%Y-%m-%d").date()
+                    end_date = datetime.strptime(parts[1].strip(), "%Y-%m-%d").date()
+                except Exception:
+                    raise HTTPException(status_code=400, detail="Invalid dateRange format. Use YYYY-MM-DD to YYYY-MM-DD")
+            else:
+                raise HTTPException(status_code=400, detail="Invalid dateRange format. Use YYYY-MM-DD to YYYY-MM-DD")
+        else:
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=6)
+
+        conn = get_database_connection()
+        cur = conn.cursor(dictionary=True)
+
+        # Get data for the requested date range
+        cur.execute("""
+            SELECT DATE(ar.date_of_attendance) AS label,
+                   l.location_name,
+                   COUNT(*) AS present_count
+            FROM employees e
+            JOIN locations l ON e.location_id = l.location_id
+            JOIN attendance_records ar ON e.employee_id = ar.employee_id
+            JOIN attendance_status_type ast ON ar.status_id = ast.status_id
+            WHERE ar.date_of_attendance BETWEEN %s AND %s
+            AND ast.status_name IN ('Present', 'Late', 'Work From Home')
+            AND e.employement_status = 'ACTIVE'
+            GROUP BY label, l.location_name
+            ORDER BY label ASC
+        """, (start_date, end_date))
+        rows = cur.fetchall()
+        conn.close()
+
+        # Prepare data for chart
+        labels = sorted(list({str(row["label"]) for row in rows}))
+        location_names = sorted(list({row["location_name"] for row in rows}))
+
+        datasets = []
+        for loc in location_names:
+            data = [next((r["present_count"] for r in rows if str(r["label"]) == lbl and r["location_name"] == loc), 0)
+                    for lbl in labels]
+            datasets.append({"label": loc, "data": data})
+
+        return {"labels": labels, "datasets": datasets}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
