@@ -162,3 +162,64 @@ def trend_7days(dateRange: Optional[str] = Query("", alias="dateRange"), start: 
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+# --- Location summary endpoint ---
+@router.get("/summary")
+def location_summary(dateRange: Optional[str] = Query("", alias="dateRange"), start: Optional[str] = Query(None), end: Optional[str] = Query(None), location: Optional[str] = Query(None), department: Optional[str] = Query(None)):
+    try:
+        # resolve date range if provided; default to today (summary for a single day)
+        if start and end:
+            try:
+                start_date = datetime.strptime(start.strip(), "%Y-%m-%d").date()
+                end_date = datetime.strptime(end.strip(), "%Y-%m-%d").date()
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid start/end format. Use YYYY-MM-DD")
+            today = end_date
+        elif dateRange:
+            parts = re.split(r"\s+to\s+|\s+-\s+", dateRange)
+            if len(parts) >= 2:
+                try:
+                    start_date = datetime.strptime(parts[0].strip(), "%Y-%m-%d").date()
+                    end_date = datetime.strptime(parts[1].strip(), "%Y-%m-%d").date()
+                except Exception:
+                    raise HTTPException(status_code=400, detail="Invalid dateRange format. Use YYYY-MM-DD to YYYY-MM-DD")
+            else:
+                raise HTTPException(status_code=400, detail="Invalid dateRange format. Use YYYY-MM-DD to YYYY-MM-DD")
+            # for summary we use the end_date to show attendance for that day
+            today = end_date
+        else:
+            today = datetime.now().date()
+
+        conn = get_database_connection()
+        cur = conn.cursor(dictionary=True)
+
+        cur.execute("""
+            SELECT l.location_id,
+                   l.location_name AS name,
+                   SUM(CASE WHEN ast.status_name IN ('Present', 'Late', 'Work From Home') THEN 1 ELSE 0 END) AS present,
+                   SUM(CASE WHEN ast.status_name = 'Absent' THEN 1 ELSE 0 END) AS absent,
+                   COUNT(DISTINCT CASE WHEN ast.status_name IS NOT NULL THEN e.employee_id END) AS marked,
+                   COUNT(DISTINCT e.employee_id) AS total_in_location
+            FROM locations l
+            LEFT JOIN employees e ON l.location_id = e.location_id AND e.employement_status = 'ACTIVE'
+            LEFT JOIN attendance_records ar ON e.employee_id = ar.employee_id AND ar.date_of_attendance = %s
+            LEFT JOIN attendance_status_type ast ON ar.status_id = ast.status_id
+            GROUP BY l.location_id, l.location_name
+            ORDER BY l.location_name ASC
+        """, (today,))
+        summary = cur.fetchall()
+        conn.close()
+
+        # Convert to list of dicts with correct format
+        result = []
+        for row in summary:
+            result.append({
+                "name": row["name"],
+                "present": row["present"] or 0,
+                "absent": row["absent"] or 0
+            })
+
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
