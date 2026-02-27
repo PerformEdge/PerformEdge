@@ -193,3 +193,66 @@ def daily_absentee_by_dept(start: Optional[str] = Query(None), end: Optional[str
     finally:
         cur.close()
         conn.close()
+
+# --- Department breakdown table ---
+@router.get("/dept-breakdown")
+def department_breakdown(start: Optional[str] = Query(None), end: Optional[str] = Query(None), dateRange: Optional[str] = Query(None, alias="dateRange"), department: Optional[str] = Query(None)):
+    """Get detailed department breakdown with daily absent counts"""
+    start_date, end_date = resolve_date_range(date_range=dateRange, start=start, end=end, default_days=7)
+    
+    conn = get_database_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        query = """
+            SELECT d.department_name AS dept,
+                   COUNT(DISTINCT e.employee_id) AS staff,
+                   SUM(CASE WHEN DAYNAME(ar.date_of_attendance)='Monday' AND ast.status_name='Absent' THEN 1 ELSE 0 END) AS mon,
+                   SUM(CASE WHEN DAYNAME(ar.date_of_attendance)='Tuesday' AND ast.status_name='Absent' THEN 1 ELSE 0 END) AS tue,
+                   SUM(CASE WHEN DAYNAME(ar.date_of_attendance)='Wednesday' AND ast.status_name='Absent' THEN 1 ELSE 0 END) AS wed,
+                   SUM(CASE WHEN DAYNAME(ar.date_of_attendance)='Thursday' AND ast.status_name='Absent' THEN 1 ELSE 0 END) AS thu,
+                   SUM(CASE WHEN DAYNAME(ar.date_of_attendance)='Friday' AND ast.status_name='Absent' THEN 1 ELSE 0 END) AS fri
+            FROM employees e
+            JOIN departments d ON d.department_id = e.department_id
+            LEFT JOIN attendance_records ar 
+                   ON ar.employee_id = e.employee_id 
+                   AND ar.date_of_attendance BETWEEN %s AND %s
+            LEFT JOIN attendance_status_type ast ON ast.status_id = ar.status_id
+            WHERE 1=1
+        """
+        params = [start_date, end_date]
+        
+        if department:
+            query += " AND d.department_name = %s"
+            params.append(department)
+        
+        query += " GROUP BY d.department_name ORDER BY staff DESC"
+        
+        cur.execute(query, params)
+        rows = cur.fetchall()
+
+        for r in rows:
+            total = sum([r.get("mon") or 0, r.get("tue") or 0, r.get("wed") or 0, r.get("thu") or 0, r.get("fri") or 0])
+            r["avg"] = round(total / 5, 1) if total > 0 else 0
+        return rows
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        cur.close()
+        conn.close()
+
+# --- Get available departments ---
+@router.get("/departments")
+def get_departments():
+    """Get list of all departments"""
+    conn = get_database_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("SELECT DISTINCT department_name FROM departments ORDER BY department_name")
+        rows = cur.fetchall()
+        return [r["department_name"] for r in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        cur.close()
+        conn.close()
+
