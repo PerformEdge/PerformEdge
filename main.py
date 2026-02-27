@@ -42,9 +42,35 @@ app.add_middleware(
 )
 
 app.include_router(login_router)
+app.include_router(dashboard_router)
+app.include_router(performance_router)
 app.include_router(signup_router)
-app.include_router(forgot_router)
+app.include_router(forgot_password_router)
+app.include_router(employee_dashboard_router)
+app.include_router(employee_leave_router)
+app.include_router(employee_performance_router)
+app.include_router(employee_people_router)
+app.include_router(meta_router)
+app.include_router(search_router)
+app.include_router(notifications_router)
+app.include_router(messages_router)
+app.include_router(users_router)
+app.include_router(eim_router)
+app.include_router(service_year_analysis_router)
+app.include_router(staff_analysis_router)
+app.include_router(contract_type_distribution_router)
+app.include_router(location_wise_staff_distribution_router)
+app.include_router(age_analysis_router)
+app.include_router(upcoming_birthdays_router)
+app.include_router(category_distribution_router)
+app.include_router(gender_analysis_router)
+app.include_router(attendance_router)
+app.include_router(attendance_trends_router)
+app.include_router(attendance_location_router)
+app.include_router(latecomers_router)
+app.include_router(nopay_router)
+
 
 @app.get("/")
 def root():
-    return {"status": "Backend running"}
+    return {"message": "PerformEdge backend is running"}
