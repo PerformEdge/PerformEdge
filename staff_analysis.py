@@ -7,12 +7,14 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from datetime import date
 import io
-import re
+from date_utils import resolve_date_range
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
 
-#  GET COMPANY ID FROM JWT
+# ============================================================
+# 🔐 GET COMPANY ID FROM JWT
+# ============================================================
 
 def _get_company_id(authorization: Optional[str]) -> str:
     if not authorization:
@@ -31,24 +33,7 @@ def _get_company_id(authorization: Optional[str]) -> str:
 
     return company_id
 
-
-def _parse_date_range(date_range: str) -> Optional[Tuple[str, str]]:
-    if not date_range:
-        return None
-
-    parts = re.split(r"\s+to\s+|\.\.", date_range.strip())
-    if len(parts) != 2:
-        return None
-
-    start_str, end_str = parts[0].strip(), parts[1].strip()
-    if not start_str or not end_str:
-        return None
-
-    return start_str, end_str
-
-
 #  MAIN STAFF ANALYSIS ENDPOINT
-
 
 @router.get("/staff-analysis")
 def staff_analysis(
@@ -65,29 +50,38 @@ def staff_analysis(
 
     filters_sql = " AND e.company_id = %s "
     params: List = [company_id]
+    dim_filters_sql = " AND e.company_id = %s "
+    dim_params: List = [company_id]
+    start_dt = None
+    end_dt = None
 
-    #  DATE FILTER 
+    # ---------------- DATE FILTER ----------------
     if date_range:
-        parsed_range = _parse_date_range(date_range)
-        if parsed_range:
-            start_str, end_str = parsed_range
+        try:
+            start_dt, end_dt = resolve_date_range(date_range=date_range)
             filters_sql += " AND e.join_date BETWEEN %s AND %s "
-            params.extend([start_str, end_str])
+            params.extend([start_dt.isoformat(), end_dt.isoformat()])
+        except HTTPException:
+            raise
 
-    #  DEPARTMENT FILTER 
+    # ---------------- DEPARTMENT FILTER ----------------
     if department:
         filters_sql += " AND e.department_id = %s "
         params.append(department)
+        dim_filters_sql += " AND e.department_id = %s "
+        dim_params.append(department)
 
-    #  LOCATION FILTER 
+    # ---------------- LOCATION FILTER ----------------
     if location:
         filters_sql += " AND e.location_id = %s "
         params.append(location)
+        dim_filters_sql += " AND e.location_id = %s "
+        dim_params.append(location)
 
     today = date.today()
-    
+
     try:
-     # KPIs 
+        # ================= KPIs =================
 
         cursor.execute(f"""
             SELECT COUNT(*) AS total
@@ -100,17 +94,19 @@ def staff_analysis(
         cursor.execute(f"""
             SELECT COUNT(*) AS new_joiners
             FROM employees e
-            WHERE YEAR(e.join_date) = YEAR(%s)
-            {filters_sql}
-        """, [today] + params)
+            WHERE 1=1
+            {dim_filters_sql}
+            {'AND e.join_date BETWEEN %s AND %s' if start_dt and end_dt else 'AND YEAR(e.join_date) = YEAR(%s)'}
+        """, ([*dim_params, start_dt.isoformat(), end_dt.isoformat()] if start_dt and end_dt else [*dim_params, today]))
         new_joiners = cursor.fetchone()["new_joiners"] or 0
 
         cursor.execute(f"""
             SELECT COUNT(*) AS resigned
             FROM employees e
-            WHERE e.employement_status = 'RESIGNED'
-            {filters_sql}
-        """, params)
+            WHERE (e.employement_status = 'RESIGNED' OR e.retired_date IS NOT NULL)
+            {dim_filters_sql}
+            {'AND COALESCE(e.retired_date, e.join_date) BETWEEN %s AND %s' if start_dt and end_dt else 'AND YEAR(COALESCE(e.retired_date, e.join_date)) = YEAR(%s)'}
+        """, ([*dim_params, start_dt.isoformat(), end_dt.isoformat()] if start_dt and end_dt else [*dim_params, today]))
         resigned_staff = cursor.fetchone()["resigned"] or 0
 
         cursor.execute(f"""
@@ -121,28 +117,29 @@ def staff_analysis(
             {filters_sql}
         """, params)
         pending_recruit = cursor.fetchone()["pending"] or 0
-        
-        # TREND 
+
+        #  TREND ANALYSIS
 
         cursor.execute(f"""
             SELECT MONTH(e.join_date) AS month, COUNT(*) AS count
             FROM employees e
-            WHERE YEAR(e.join_date) = YEAR(%s)
-            {filters_sql}
+            WHERE 1=1
+            {dim_filters_sql}
+            {'AND e.join_date BETWEEN %s AND %s' if start_dt and end_dt else 'AND YEAR(e.join_date) = YEAR(%s)'}
             GROUP BY MONTH(e.join_date)
             ORDER BY MONTH(e.join_date)
-        """, [today] + params)
+        """, ([*dim_params, start_dt.isoformat(), end_dt.isoformat()] if start_dt and end_dt else [*dim_params, today]))
         joiner_rows = cursor.fetchall()
 
         cursor.execute(f"""
-            SELECT MONTH(e.retired_date) AS month, COUNT(*) AS count
+                        SELECT MONTH(COALESCE(e.retired_date, e.join_date)) AS month, COUNT(*) AS count
             FROM employees e
-            WHERE e.employement_status = 'RESIGNED'
-              AND YEAR(e.retired_date) = YEAR(%s)
-            {filters_sql}
-            GROUP BY MONTH(e.retired_date)
-            ORDER BY MONTH(e.retired_date)
-        """, [today] + params)
+                        WHERE (e.employement_status = 'RESIGNED' OR e.retired_date IS NOT NULL)
+                        {dim_filters_sql}
+                        {'AND COALESCE(e.retired_date, e.join_date) BETWEEN %s AND %s' if start_dt and end_dt else 'AND YEAR(COALESCE(e.retired_date, e.join_date)) = YEAR(%s)'}
+                        GROUP BY MONTH(COALESCE(e.retired_date, e.join_date))
+                        ORDER BY MONTH(COALESCE(e.retired_date, e.join_date))
+                """, ([*dim_params, start_dt.isoformat(), end_dt.isoformat()] if start_dt and end_dt else [*dim_params, today]))
         resigned_rows = cursor.fetchall()
 
         months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
@@ -156,7 +153,7 @@ def staff_analysis(
             "resigned": [resigned_map.get(i + 1, 0) for i in range(12)],
         }
 
-        # DISTRIBUTION 
+        #  DISTRIBUTION 
 
         current_staff = total_staff - resigned_staff
 
@@ -166,7 +163,7 @@ def staff_analysis(
             "resigned": resigned_staff,
         }
 
-        # NEW JOINERS LIST 
+        #  NEW JOINERS LIST 
 
         cursor.execute(f"""
             SELECT e.full_name AS name,
@@ -174,26 +171,28 @@ def staff_analysis(
                    e.join_date AS date
             FROM employees e
             LEFT JOIN departments d ON e.department_id = d.department_id
-            WHERE e.employement_status = 'NEW_JOINER'
-            {filters_sql}
+            WHERE 1=1
+            {dim_filters_sql}
+            {'AND e.join_date BETWEEN %s AND %s' if start_dt and end_dt else 'AND YEAR(e.join_date) = YEAR(%s)'}
             ORDER BY e.join_date DESC
             LIMIT 5
-        """, params)
+        """, ([*dim_params, start_dt.isoformat(), end_dt.isoformat()] if start_dt and end_dt else [*dim_params, today]))
         new_joiners_list = cursor.fetchall()
 
-        # RESIGNED LIST 
+        #  RESIGNED LIST 
 
         cursor.execute(f"""
             SELECT e.full_name AS name,
                    d.department_name AS department,
-                   e.retired_date AS date
+                   COALESCE(e.retired_date, e.join_date) AS date
             FROM employees e
             LEFT JOIN departments d ON e.department_id = d.department_id
-            WHERE e.employement_status = 'RESIGNED'
-            {filters_sql}
-            ORDER BY e.retired_date DESC
+            WHERE (e.employement_status = 'RESIGNED' OR e.retired_date IS NOT NULL)
+            {dim_filters_sql}
+            {'AND COALESCE(e.retired_date, e.join_date) BETWEEN %s AND %s' if start_dt and end_dt else 'AND YEAR(COALESCE(e.retired_date, e.join_date)) = YEAR(%s)'}
+            ORDER BY COALESCE(e.retired_date, e.join_date) DESC
             LIMIT 5
-        """, params)
+        """, ([*dim_params, start_dt.isoformat(), end_dt.isoformat()] if start_dt and end_dt else [*dim_params, today]))
         resigned_list = cursor.fetchall()
 
         return {
@@ -212,7 +211,7 @@ def staff_analysis(
     finally:
         cursor.close()
         conn.close()
-        
+
 
 #  PDF GENERATOR
 
@@ -259,7 +258,6 @@ def _pdf_response(filename: str, buf: io.BytesIO):
     )
 
 
-
 #  REPORT DOWNLOAD ENDPOINT
 
 
@@ -290,16 +288,14 @@ def staff_analysis_report(
         f"Resigned Staff: {data['kpis']['resigned_staff']}",
         "",
         "Trend (New Joiners): " + ", ".join(map(str, data["trend"]["new_joiners"])),
-        "Trend (Resigned): " + ", ".join(map(str, data["trend"]["resigned"])),"",
-        
+        "Trend (Resigned): " + ", ".join(map(str, data["trend"]["resigned"])),
     ]
     
     for nj in data["new_joiners_list"]:
         lines.append(f"New Joiner: {nj['name']} ({nj['department']}) - {nj['date']}")       
         
     for r in data["resigned_list"]:
-        lines.append(f"Resigned: {r['name']} ({r['department']}) - {r['date']}")        
-
+        lines.append(f"Resigned: {r['name']} ({r['department']}) - {r['date']}")  
     buf = _pdf_make(
         "Staff Analysis Report",
         filters,
