@@ -4,7 +4,7 @@ from security import verify_token
 from fastapi.responses import FileResponse
 from datetime import date
 from database import get_database_connection
-import re
+from date_utils import resolve_date_range
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
@@ -40,19 +40,6 @@ def _get_company_id(authorization: Optional[str]) -> str:
     return company_id
 
 
-def _parse_date_range(date_range: str) -> Optional[List[str]]:
-    if not date_range:
-        return None
-
-    parts = re.split(r"\s+to\s+|\.\.", date_range.strip())
-    if len(parts) != 2:
-        return None
-
-    start_str, end_str = parts[0].strip(), parts[1].strip()
-    if not start_str or not end_str:
-        return None
-
-    return [start_str, end_str]
 
 
 
@@ -69,13 +56,15 @@ def get_upcoming_birthdays(
 
     filters = []
     params: List = [company_id]
+    start_dt = None
+    end_dt = None
 
     # -------- DATE FILTER --------
     if date_range:
-        parsed_range = _parse_date_range(date_range)
-        if parsed_range:
-            filters.append("e.join_date BETWEEN %s AND %s")
-            params.extend(parsed_range)
+        try:
+            start_dt, end_dt = resolve_date_range(date_range=date_range)
+        except HTTPException:
+            raise
 
     # -------- DEPARTMENT FILTER --------
     if department:
@@ -111,8 +100,8 @@ def get_upcoming_birthdays(
 
 
     # Get department names
-    dept_query = "SELECT department_id, department_name FROM departments"
-    cursor.execute(dept_query)
+    dept_query = "SELECT department_id, department_name FROM departments WHERE company_id = %s"
+    cursor.execute(dept_query, (company_id,))
     departments = {row['department_id']: row['department_name'] for row in cursor.fetchall()}
 
     today = date.today()
@@ -130,7 +119,14 @@ def get_upcoming_birthdays(
 
         days_left = (this_year_birthday - today).days
 
-        if 0 <= days_left <= 30:
+        should_include = False
+
+        if start_dt and end_dt:
+            should_include = start_dt <= this_year_birthday <= end_dt
+        else:
+            should_include = 0 <= days_left <= 30
+
+        if should_include:
 
             if days_left <= 7:
                 tag = "This Week"

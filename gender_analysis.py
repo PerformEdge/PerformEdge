@@ -72,44 +72,34 @@ def _parse_date_range(date_range: str) -> Optional[List[str]]:
     return [start_str, end_str]
 
 
-# ==============================
-# GET DATA
-# ==============================
-
-@router.get("/gender-analysis")
-def get_gender_analysis(
-     date_range: str = Query("", alias="dateRange"),
-    department: str = Query("", alias="department"),
-    location: str = Query("", alias="location"),
-    company_id: Optional[str] = Query(None),
-    authorization: Optional[str] = Header(None),
-):
-    resolved_company_id = _resolve_company_id(company_id, authorization)
-
+def _get_gender_analysis_data(
+    resolved_company_id: str,
+    date_range: str = "",
+    department: str = "",
+    location: str = "",
+) -> Dict:
     filters_sql = ""
     params: List = []
 
-    # ---------------- DATE FILTER ----------------
     if date_range:
         parsed_range = _parse_date_range(date_range)
         if parsed_range:
             filters_sql += " AND e.join_date BETWEEN %s AND %s "
             params.extend(parsed_range)
 
-    # ---------------- DEPARTMENT FILTER ----------------
-    if department:
+    if department and department != "All":
         filters_sql += " AND e.department_id = %s "
         params.append(department)
 
-    # ---------------- LOCATION FILTER ----------------
-    if location:
+    if location and location != "All":
         filters_sql += " AND e.location_id = %s "
         params.append(location)
+
     conn = get_database_connection()
     cursor = conn.cursor(dictionary=True)
 
     query = """
-        SELECT 
+        SELECT
             e.full_name,
             e.gender,
             d.department_name
@@ -128,9 +118,8 @@ def get_gender_analysis(
     conn.close()
 
     total = len(employees)
-
-    male_count = sum(1 for e in employees if e["gender"].lower() == "male")
-    female_count = sum(1 for e in employees if e["gender"].lower() == "female")
+    male_count = sum(1 for e in employees if (e["gender"] or "").lower() == "male")
+    female_count = sum(1 for e in employees if (e["gender"] or "").lower() == "female")
 
     male_percentage = round((male_count / total) * 100, 2) if total else 0
     female_percentage = round((female_count / total) * 100, 2) if total else 0
@@ -146,15 +135,46 @@ def get_gender_analysis(
 
 
 # ==============================
+# GET DATA
+# ==============================
+
+@router.get("/gender-analysis")
+def get_gender_analysis(
+     date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
+):
+    resolved_company_id = _resolve_company_id(company_id, authorization)
+
+    return _get_gender_analysis_data(
+        resolved_company_id=resolved_company_id,
+        date_range=date_range,
+        department=department,
+        location=location,
+    )
+
+
+# ==============================
 # DOWNLOAD PDF REPORT
 # ==============================
 
 @router.get("/gender-analysis/report")
 def download_gender_report(
-    company_id: str = Query(...),
-    department_id: str = Query(None)
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
 ):
-    data = get_gender_analysis(company_id, department_id)
+    resolved_company_id = _resolve_company_id(company_id, authorization)
+    data = _get_gender_analysis_data(
+        resolved_company_id=resolved_company_id,
+        date_range=date_range,
+        department=department,
+        location=location,
+    )
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)

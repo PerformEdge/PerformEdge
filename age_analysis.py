@@ -5,14 +5,14 @@ from database import get_database_connection
 from security import verify_token
 from fastapi.responses import StreamingResponse
 import io
-import re
+from date_utils import resolve_date_range
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
 # ============================================================
-#  COMPANY RESOLUTION
+# 🔐 COMPANY RESOLUTION
 # ============================================================
 
 def _company_id_from_token(authorization: Optional[str]) -> Optional[str]:
@@ -43,23 +43,11 @@ def _resolve_company_id(
     raise HTTPException(status_code=401, detail="Company not resolved")
 
 
-def _parse_date_range(date_range: str) -> Optional[List[str]]:
-    if not date_range:
-        return None
 
-    parts = re.split(r"\s+to\s+|\.\.", date_range.strip())
-    if len(parts) != 2:
-        return None
-
-    start_str, end_str = parts[0].strip(), parts[1].strip()
-    if not start_str or not end_str:
-        return None
-
-    return [start_str, end_str]
 
 
 # ============================================================
-#  MAIN ENDPOINT
+# 📊 MAIN ENDPOINT
 # ============================================================
 
 @router.get("/age-analysis")
@@ -85,11 +73,12 @@ def age_analysis(
         params.append(location)
         
     if date_range:
-        parsed_range = _parse_date_range(date_range)
-        if not parsed_range:
-            raise HTTPException(status_code=400, detail="Invalid dateRange format. Use 'YYYY-MM-DD to YYYY-MM-DD' or 'YYYY-MM-DD..YYYY-MM-DD'.")
-        filters_sql += " AND e.join_date BETWEEN %s AND %s "
-        params.extend(parsed_range)
+        try:
+            start_dt, end_dt = resolve_date_range(date_range=date_range)
+            filters_sql += " AND e.join_date BETWEEN %s AND %s "
+            params.extend([start_dt.isoformat(), end_dt.isoformat()])
+        except HTTPException:
+            raise
 
     conn = get_database_connection()
     cursor = conn.cursor(dictionary=True)
@@ -182,7 +171,7 @@ def age_analysis(
 
 
 # ============================================================
-#  PDF GENERATOR
+# 📄 PDF GENERATOR
 # ============================================================
 
 def _pdf_make(
@@ -250,7 +239,7 @@ def _pdf_response(filename: str, buf: io.BytesIO) -> StreamingResponse:
 
 
 # ============================================================
-#  REPORT ENDPOINT
+# 📥 REPORT ENDPOINT
 # ============================================================
 
 @router.get("/age-analysis/report")

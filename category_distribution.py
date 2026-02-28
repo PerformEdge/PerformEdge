@@ -7,13 +7,13 @@ from fastapi.responses import StreamingResponse
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import io
-import re
+from date_utils import resolve_date_range
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
 
 # ============================================================
-#  COMPANY FROM TOKEN
+# 🔐 COMPANY FROM TOKEN
 # ============================================================
 
 def _get_company_id(authorization: Optional[str]) -> str:
@@ -33,23 +33,11 @@ def _get_company_id(authorization: Optional[str]) -> str:
     return company_id
 
 
-def _parse_date_range(date_range: str) -> Optional[List[str]]:
-    if not date_range:
-        return None
 
-    parts = re.split(r"\s+to\s+|\.\.", date_range.strip())
-    if len(parts) != 2:
-        return None
-
-    start_str, end_str = parts[0].strip(), parts[1].strip()
-    if not start_str or not end_str:
-        return None
-
-    return [start_str, end_str]
 
 
 # ============================================================
-#  CATEGORY DISTRIBUTION
+# 📊 CATEGORY DISTRIBUTION
 # ============================================================
 
 @router.get("/category-distribution")
@@ -67,10 +55,12 @@ def category_distribution(
 
     # -------- DATE FILTER --------
     if date_range:
-        parsed_range = _parse_date_range(date_range)
-        if parsed_range:
+        try:
+            start_dt, end_dt = resolve_date_range(date_range=date_range)
             filters.append("e.join_date BETWEEN %s AND %s")
-            params.extend(parsed_range)
+            params.extend([start_dt.isoformat(), end_dt.isoformat()])
+        except HTTPException:
+            raise
 
     # -------- DEPARTMENT FILTER --------
     if department:
@@ -149,7 +139,7 @@ def category_distribution(
 
         employees = cursor.fetchall()
 
-        #  IMPORTANT: Always return labels & values
+        # 🔥 IMPORTANT: Always return labels & values
         return {
             "labels": ["Academic", "Administrative"],
             "values": [academic, administrative],
@@ -164,7 +154,7 @@ def category_distribution(
 
 
 # ============================================================
-# PDF GENERATOR
+# 📄 PDF GENERATOR
 # ============================================================
 
 def _pdf_make(title: str, 
@@ -229,7 +219,7 @@ def _pdf_response(filename: str, buf: io.BytesIO):
 
 
 # ============================================================
-#  REPORT ENDPOINT
+# 📥 REPORT ENDPOINT
 # ============================================================
 
 @router.get("/category-distribution/report")
