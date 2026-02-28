@@ -12,9 +12,9 @@ from date_utils import resolve_date_range
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
 
-# ============================================================
-# 🔐 GET COMPANY ID FROM JWT
-# ============================================================
+
+#  GET COMPANY ID FROM JWT
+
 
 def _get_company_id(authorization: Optional[str]) -> str:
     if not authorization:
