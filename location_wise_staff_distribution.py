@@ -11,7 +11,6 @@ from reportlab.lib.pagesizes import letter
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
-
 #  COMPANY RESOLUTION
 
 
@@ -78,26 +77,26 @@ def location_wise_staff_distribution(
     filters_sql = ""
     params: List = []
 
-    # DATE FILTER
+    #  DATE FILTER 
     if date_range:
         parsed_range = _parse_date_range(date_range)
         if parsed_range:
             filters_sql += " AND e.join_date BETWEEN %s AND %s "
             params.extend(parsed_range)
 
-    # DEPARTMENT FILTER 
+    #  DEPARTMENT FILTER 
     if department:
         filters_sql += " AND e.department_id = %s "
         params.append(department)
 
-    #  LOCATION FILTER
+    # LOCATION FILTER 
     if location:
         filters_sql += " AND e.location_id = %s "
         params.append(location)
 
     conn = get_database_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
     try:
 
         # TOTAL STAFF 
@@ -111,7 +110,7 @@ def location_wise_staff_distribution(
 
         total_staff = cursor.fetchone()["total"] or 0
 
-        # LOCATION DISTRIBUTION 
+        #  LOCATION DISTRIBUTION
         cursor.execute(f"""
             SELECT 
                 l.location_name AS location,
@@ -144,7 +143,7 @@ def location_wise_staff_distribution(
 
         employees = cursor.fetchall()
 
-        #  MAX / MIN
+        #  MAX / MIN 
         max_location = ""
         min_location = ""
 
@@ -239,7 +238,6 @@ def _pdf_response(filename: str, buf: io.BytesIO) -> StreamingResponse:
             "Content-Disposition": f'attachment; filename="{filename}"'
         },
     )
-
 
 
 #  REPORT ENDPOINT
