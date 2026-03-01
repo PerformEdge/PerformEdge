@@ -158,3 +158,118 @@ def contract_type_distribution(
     finally:
         cursor.close()
         conn.close()
+
+
+#  PDF GENERATOR
+
+
+def _pdf_make(title: str, 
+    subtitle: str = "",filters: Dict[str, str] = None, lines: List[str] = None) -> io.BytesIO:
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    width, height = letter
+
+    x = 50
+    y = height - 60
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(x, y, title)
+    y -= 30
+
+    # ---- Subtitle ----
+    if subtitle:
+        c.setFont("Helvetica", 10)
+        c.drawString(x, y, subtitle)
+        y -= 18
+
+    # ---- Filters ----
+    if filters:
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(x, y, "Filters")
+        y -= 14
+
+        c.setFont("Helvetica", 10)
+        for k, v in filters.items():
+            if y < 70:
+                c.showPage()
+                y = height - 60
+                c.setFont("Helvetica", 10)
+
+            c.drawString(x, y, f"{k}: {v}")
+            y -= 13
+
+        y -= 6
+
+    c.setFont("Helvetica", 10)
+
+    for line in lines:
+        if y < 70:
+            c.showPage()
+            y = height - 60
+            c.setFont("Helvetica", 10)
+
+        c.drawString(x, y, str(line))
+        y -= 15
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+def _pdf_response(filename: str, buf: io.BytesIO):
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+#  REPORT ENDPOINT
+
+
+@router.get("/contract-type-distribution/report")
+def contract_type_distribution_report(
+    authorization: Optional[str] = Header(None),
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+):
+
+    data = contract_type_distribution(
+        date_range=date_range,
+        department=department,
+        location=location,
+        authorization=authorization
+    )
+    
+    filters = {
+        "Date Range": date_range or "All Time",
+        "Department": department or "All Departments",
+        "Location": location or "All Locations"
+    }
+
+    lines = [
+        f"Total Staff: {data['kpis']['total']}",
+        f"Permanent: {data['kpis']['permanent']}",
+        f"Consultants: {data['kpis']['consultants']}",
+        f"Probation: {data['kpis']['probation']}",
+        "",
+        "Distribution:",
+    ]
+
+    for item in data["summary"]:
+        lines.append(f"- {item['type']}: {item['percentage']}% ")
+    
+    lines.extend(["", "Employee List (Name | Department | Contract Type)"])
+
+    
+    for emp in data["employees"]:
+        lines.append(f"{emp['name']} | {emp['department']} | {emp['contract']}")
+        
+        
+    buf = _pdf_make(title="Contract Type Distribution Report", 
+                    subtitle=f"Generated on {date.today().isoformat()}",
+                    filters=filters, 
+                    lines=lines)
+
+    return _pdf_response("contract_type_distribution_report.pdf", buf)
