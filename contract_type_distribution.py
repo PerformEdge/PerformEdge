@@ -74,3 +74,87 @@ def contract_type_distribution(
 
     conn = get_database_connection()
     cursor = conn.cursor(dictionary=True)
+
+    try:
+        #  TOTAL STAFF 
+        cursor.execute(f"""
+            SELECT COUNT(*) AS total
+            FROM employees e
+            WHERE e.company_id = %s
+            AND e.employement_status = 'ACTIVE'
+            {filter_sql}
+        """, params)
+
+        total_staff = cursor.fetchone()["total"] or 0
+
+        #  CONTRACT COUNTS 
+        cursor.execute(f"""
+            SELECT ec.contract_type, COUNT(*) AS count
+            FROM employment_contract ec
+            JOIN employees e ON e.employee_id = ec.employee_id
+            WHERE e.company_id = %s
+            AND e.employement_status = 'ACTIVE'
+            AND ec.is_current = 1
+            {filter_sql}
+            GROUP BY ec.contract_type
+        """, params)
+
+        rows = cursor.fetchall()
+
+        permanent = 0
+        consultants = 0
+        probation = 0
+
+        for row in rows:
+            ctype = (row["contract_type"] or "").lower()
+            count = row["count"]
+
+            if ctype == "full-time":
+                permanent = count
+            elif ctype == "consultant":
+                consultants = count
+            elif ctype == "probation":
+                probation = count
+
+        # SUMMARY 
+        def percentage(value):
+            return round((value / total_staff) * 100, 0) if total_staff else 0
+
+        summary = [
+            {"type": "Permanent", "percentage": percentage(permanent)},
+            {"type": "Consultants", "percentage": percentage(consultants)},
+            {"type": "Probation", "percentage": percentage(probation)},
+        ]
+
+        #  EMPLOYEE TABLE 
+        cursor.execute(f"""
+            SELECT
+                e.full_name AS name,
+                d.department_name AS department,
+                ec.contract_type AS contract
+            FROM employees e
+            LEFT JOIN departments d ON d.department_id = e.department_id
+            LEFT JOIN employment_contract ec
+                ON ec.employee_id = e.employee_id
+                AND ec.is_current = 1
+            WHERE e.company_id = %s
+            AND e.employement_status = 'ACTIVE'
+            {filter_sql}
+        """, params)
+
+        employees = cursor.fetchall()
+
+        return {
+            "kpis": {
+                "total": total_staff,
+                "permanent": permanent,
+                "consultants": consultants,
+                "probation": probation
+            },
+            "summary": summary,
+            "employees": employees
+        }
+
+    finally:
+        cursor.close()
+        conn.close()
