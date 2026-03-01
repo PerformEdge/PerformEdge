@@ -8,11 +8,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-# Report generation (PDF)
 try:
     from reportlab.lib.pagesizes import letter
     from reportlab.pdfgen import canvas
-except Exception:  
+except Exception: 
     letter = None
     canvas = None
 
@@ -126,13 +125,16 @@ def _company_id_from_token(authorization: Optional[str]) -> Optional[str]:
 def _resolve_company_id(
     company_id_query: Optional[str], authorization: Optional[str]
 ) -> str:
+    # 1) Query param wins (useful for testing)
     if company_id_query:
         return company_id_query
 
+    # 2) Token
     cid = _company_id_from_token(authorization)
     if cid:
         return cid
 
+    # 3) Fallback for local testing so the UI doesn't break
     return "C001"
 
 
@@ -213,6 +215,7 @@ def _pick_cycle(company_id: str, date_range: str) -> Optional[Dict[str, Any]]:
         )
         if row:
             return row
+        return None
 
     # 2) Current cycle (today between dates)
     row = _fetch_one(
@@ -272,7 +275,7 @@ def _bucket(scale: List[Dict[str, Any]], score: int) -> Dict[str, Any]:
     return {"rating_name": "Unrated", "color_hex": "#999999"}
 
 
-# Overview (used by /dashboard/performance)
+# 0) Overview (used by /dashboard/performance)
 
 @router.get("/overview")
 def performance_overview(
@@ -294,6 +297,7 @@ def performance_overview(
 
     ranking_chart: List[Dict[str, Any]] = []
     ranking_legend: List[Dict[str, Any]] = []
+    rows: List[Dict[str, Any]] = []
 
     if cycle_id:
         sql = """
@@ -326,7 +330,7 @@ def performance_overview(
             ranking_legend.append({"name": r["rating_name"], "value": pct})
 
     # Training needs
-    
+
     train_sql = """
       SELECT tc.category_name, tc.color_hex, COUNT(*) AS cnt
       FROM training_requests tr
@@ -379,6 +383,8 @@ def performance_overview(
         app_sql += " AND e.location_id=%s"
         app_params.append(loc_id)
     arows = _fetch_all(app_sql, tuple(app_params))
+    if date_range and not cycle_id:
+        arows = []
     total_a = len(arows)
     completed = sum(1 for r in arows if (r.get("status") or "").upper() == "COMPLETED")
     pending = total_a - completed
@@ -390,10 +396,10 @@ def performance_overview(
         due_text = f"Due date: {cycle['end_date']}"
 
     # Overview stat cards (used by the overview page + PDF report).
-
     scores = [int(r.get("overall_score") or 0) for r in rows]
     avg_score = round(sum(scores) / len(scores)) if scores else 0
 
+    # Determine what we call "excellent" for excellence rate.
     excellent_names = {"excellent", "outstanding"}
     excellent_bucket = None
     for r in scale:
@@ -401,7 +407,7 @@ def performance_overview(
             excellent_bucket = r.get("rating_name")
             break
     if not excellent_bucket and scale:
-        excellent_bucket = scale[0].get("rating_name")  
+        excellent_bucket = scale[0].get("rating_name") 
 
     bucketed = [_bucket(scale, s).get("rating_name") for s in scores]
     excellence_rate = round((bucketed.count(excellent_bucket) / len(bucketed)) * 100) if bucketed else 0
@@ -422,6 +428,7 @@ def performance_overview(
     }
 
     return {
+        # Flattened keys (consumed by the Performance overview page)
         "stats": overview_stats,
         "ranking_chart": ranking_chart,
         "training_bars": training_bars,
@@ -430,6 +437,7 @@ def performance_overview(
             {"name": "Pending", "value": pending_pct, "color": "#E0A84B"},
         ],
 
+        # Nested keys (kept for compatibility + makes the JSON self-describing)
         "ranking": {
             "title": "Performance Ranking Distribution",
             "subtitle": "Grouped by appraisal results",
@@ -465,119 +473,119 @@ def performance_overview(
         },
     }
 
-    # 1) Ranking Distribution (page)
+# 1) Ranking Distribution (page)
 
-    @router.get("/ranking")
-    def performance_ranking(
-        date_range: str = Query("", alias="dateRange"),
-        department: str = Query("", alias="department"),
-        location: str = Query("", alias="location"),
-        company_id: Optional[str] = Query(None, alias="company_id"),
-        authorization: Optional[str] = Header(None),
-    ):
-        cid = _resolve_company_id(company_id, authorization)
-        dep_id = _resolve_department_id(cid, department)
-        loc_id = _resolve_location_id(cid, location)
-        cycle = _pick_cycle(cid, date_range)
-        if not cycle:
-            return {
-                "stats": {"averageScore": 0, "excellenceRate": 0, "needsImprovement": 0, "topPerformers": 0},
-                "chart": [],
-                "employees": [],
-            }
-
-        scale = _get_rating_scale(cid)
-
-        sql = """
-        SELECT e.full_name, d.department_name, pr.overall_score
-        FROM performance_reviews pr
-        JOIN employees e ON e.employee_id = pr.employee_id
-        LEFT JOIN departments d ON d.department_id = e.department_id
-        WHERE e.company_id=%s
-            AND pr.cycle_id=%s
-            AND e.employement_status='ACTIVE'
-        """
-        params: List[Any] = [cid, cycle["cycle_id"]]
-        if dep_id:
-            sql += " AND e.department_id=%s"
-            params.append(dep_id)
-        if loc_id:
-            sql += " AND e.location_id=%s"
-            params.append(loc_id)
-
-        rows = _fetch_all(sql, tuple(params))
-        if not rows:
-            return {
-                "stats": {"averageScore": 0, "excellenceRate": 0, "needsImprovement": 0, "topPerformers": 0},
-                "chart": [],
-                "employees": [],
-            }
-
-        scores = [int(r["overall_score"]) for r in rows]
-        avg_score = round(sum(scores) / len(scores)) if scores else 0
-
-        excellent_names = {"excellent", "outstanding"}
-        excellent_bucket = None
-        for r in scale:
-            if (r["rating_name"] or "").lower() in excellent_names:
-                excellent_bucket = r["rating_name"]
-                break
-        if not excellent_bucket and scale:
-            excellent_bucket = scale[0]["rating_name"] 
-
-        bucketed = [_bucket(scale, s)["rating_name"] for s in scores]
-        excellence_rate = round((bucketed.count(excellent_bucket) / len(bucketed)) * 100) if bucketed else 0
-
-        needs_improvement = sum(
-            1
-            for s in scores
-            if _bucket(scale, s)["rating_name"].lower() in {"needs improvement", "need improvement", "unrated"}
-        )
-        top_performers = sum(1 for s in scores if s >= 90)
-
-        # Distribution in %
-        counts: Dict[str, int] = {r["rating_name"]: 0 for r in scale}
-        for s in scores:
-            name = _bucket(scale, s)["rating_name"]
-            if name in counts:
-                counts[name] += 1
-
-        distribution: List[Dict[str, Any]] = []
-        total = len(scores)
-        for r in scale:
-            pct = round((counts[r["rating_name"]] / total) * 100) if total else 0
-            distribution.append({"name": r["rating_name"], "value": pct, "color": r.get("color_hex") or "#999999"})
-
-        employees = []
-        for r in rows:
-            rating = _bucket(scale, int(r["overall_score"]))["rating_name"]
-            employees.append(
-                {
-                    "name": r["full_name"],
-                    "department": r.get("department_name") or "-",
-                    "percentage": int(r["overall_score"]),
-                    "rating": rating,
-                }
-            )
-        employees.sort(key=lambda x: x["percentage"], reverse=True)
-
+@router.get("/ranking")
+def performance_ranking(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None, alias="company_id"),
+    authorization: Optional[str] = Header(None),
+):
+    cid = _resolve_company_id(company_id, authorization)
+    dep_id = _resolve_department_id(cid, department)
+    loc_id = _resolve_location_id(cid, location)
+    cycle = _pick_cycle(cid, date_range)
+    if not cycle:
         return {
-            "stats": {
-                "averageScore": avg_score,
-                "excellenceRate": excellence_rate,
-                "needsImprovement": needs_improvement,
-                "topPerformers": top_performers,
-            },
-            "chart": distribution,
-            "employees": employees,
-            "_debug": { 
-                "company_id": cid,
-                "cycle_id": cycle["cycle_id"],
-                "department_id": dep_id,
-                "location_id": loc_id,
-                "location": location,
-            },
+            "stats": {"averageScore": 0, "excellenceRate": 0, "needsImprovement": 0, "topPerformers": 0},
+            "chart": [],
+            "employees": [],
         }
+
+    scale = _get_rating_scale(cid)
+
+    sql = """
+      SELECT e.full_name, d.department_name, pr.overall_score
+      FROM performance_reviews pr
+      JOIN employees e ON e.employee_id = pr.employee_id
+      LEFT JOIN departments d ON d.department_id = e.department_id
+      WHERE e.company_id=%s
+        AND pr.cycle_id=%s
+        AND e.employement_status='ACTIVE'
+    """
+    params: List[Any] = [cid, cycle["cycle_id"]]
+    if dep_id:
+        sql += " AND e.department_id=%s"
+        params.append(dep_id)
+    if loc_id:
+        sql += " AND e.location_id=%s"
+        params.append(loc_id)
+
+    rows = _fetch_all(sql, tuple(params))
+    if not rows:
+        return {
+            "stats": {"averageScore": 0, "excellenceRate": 0, "needsImprovement": 0, "topPerformers": 0},
+            "chart": [],
+            "employees": [],
+        }
+
+    scores = [int(r["overall_score"]) for r in rows]
+    avg_score = round(sum(scores) / len(scores)) if scores else 0
+
+    excellent_names = {"excellent", "outstanding"}
+    excellent_bucket = None
+    for r in scale:
+        if (r["rating_name"] or "").lower() in excellent_names:
+            excellent_bucket = r["rating_name"]
+            break
+    if not excellent_bucket and scale:
+        excellent_bucket = scale[0]["rating_name"] 
+
+    bucketed = [_bucket(scale, s)["rating_name"] for s in scores]
+    excellence_rate = round((bucketed.count(excellent_bucket) / len(bucketed)) * 100) if bucketed else 0
+
+    needs_improvement = sum(
+        1
+        for s in scores
+        if _bucket(scale, s)["rating_name"].lower() in {"needs improvement", "need improvement", "unrated"}
+    )
+    top_performers = sum(1 for s in scores if s >= 90)
+
+    # Distribution in %
+    counts: Dict[str, int] = {r["rating_name"]: 0 for r in scale}
+    for s in scores:
+        name = _bucket(scale, s)["rating_name"]
+        if name in counts:
+            counts[name] += 1
+
+    distribution: List[Dict[str, Any]] = []
+    total = len(scores)
+    for r in scale:
+        pct = round((counts[r["rating_name"]] / total) * 100) if total else 0
+        distribution.append({"name": r["rating_name"], "value": pct, "color": r.get("color_hex") or "#999999"})
+
+    employees = []
+    for r in rows:
+        rating = _bucket(scale, int(r["overall_score"]))["rating_name"]
+        employees.append(
+            {
+                "name": r["full_name"],
+                "department": r.get("department_name") or "-",
+                "percentage": int(r["overall_score"]),
+                "rating": rating,
+            }
+        )
+    employees.sort(key=lambda x: x["percentage"], reverse=True)
+
+    return {
+        "stats": {
+            "averageScore": avg_score,
+            "excellenceRate": excellence_rate,
+            "needsImprovement": needs_improvement,
+            "topPerformers": top_performers,
+        },
+        "chart": distribution,
+        "employees": employees,
+        "_debug": {
+            "company_id": cid,
+            "cycle_id": cycle["cycle_id"],
+            "department_id": dep_id,
+            "location_id": loc_id,
+            "location": location,
+        },
+    }
 
 # 2) Training Needs (page)
 
@@ -748,7 +756,7 @@ def training_needs(
         total = emp["technical"] + emp["softSkills"] + emp["leadership"] + emp["compliance"]
         if total <= 0:
             continue
-        # Convert category request counts into integer percentages that sum to 100.
+
         cats = ["technical", "softSkills", "leadership", "compliance"]
         raw = [(emp[c] / total) * 100 for c in cats]
         floors = [int(x) for x in raw]
@@ -804,6 +812,29 @@ def appraisals_completion(
     loc_id = _resolve_location_id(cid, location)
     cycle = _pick_cycle(cid, date_range)
     cycle_id = cycle["cycle_id"] if cycle else None
+
+    if date_range and not cycle_id:
+        return {
+            "stats": {
+                "totalEmployees": 0,
+                "appraisalsCompleted": 0,
+                "pendingAppraisals": 0,
+                "completionRate": 0,
+            },
+            "chart": [
+                {"name": "Completed", "value": 0, "color": "#3C9A5F"},
+                {"name": "Pending", "value": 0, "color": "#E0A84B"},
+            ],
+            "rows": [],
+            "_debug": {
+                "company_id": cid,
+                "cycle_id": None,
+                "department_id": dep_id,
+                "location_id": loc_id,
+                "location": location,
+                "dateRange": date_range,
+            },
+        }
 
     base_sql = """
       SELECT
@@ -882,6 +913,7 @@ def appraisals_completion(
         },
     }
 
+# Download Report endpoints
 
 @router.get("/ranking/report")
 def ranking_report(
@@ -938,61 +970,6 @@ def ranking_report(
     )
     return _pdf_response("performance_ranking_report.pdf", buf)
 
-
-@router.get("/training/report")
-def training_report(
-    date_range: str = Query("", alias="dateRange"),
-    department: str = Query("", alias="department"),
-    location: str = Query("", alias="location"),
-    company_id: Optional[str] = Query(None, alias="company_id"),
-    authorization: Optional[str] = Header(None),
-):
-    """Download a PDF report for Training Needs Distribution."""
-
-    data = training_needs(
-        date_range=date_range,
-        department=department,
-        location=location,
-        company_id=company_id,
-        authorization=authorization,
-    )
-
-    stats = (data or {}).get("stats", {})
-    bars = (data or {}).get("bars", [])
-    rows = (data or {}).get("table", [])
-
-    filters = {
-        "Date Range": date_range or "All",
-        "Department": department or "All",
-        "Location": location or "All",
-    }
-
-    lines: List[str] = [
-        "Summary",
-        f"Total Employees: {stats.get('totalEmployees', 0)}",
-        f"Employees Need Training: {stats.get('employeesNeedTraining', 0)}",
-        f"Top Training Category: {stats.get('topTrainingCategory', '-')}",
-        f"Average Training Completion: {stats.get('avgTrainingCompletion', 0)}%",
-        "",
-        "Training Category Distribution",
-    ]
-
-    for b in bars:
-        lines.append(f"- {b.get('name')}: {b.get('value')}%")
-
-    lines.extend(["", "Employee Breakdown (first 50)"])
-    for r in rows[:50]:
-        lines.append(
-            f"- {r.get('name')} | {r.get('department')} | Tech {r.get('technical', 0)}% | Soft {r.get('softSkills', 0)}% | Leadership {r.get('leadership', 0)}% | Compliance {r.get('compliance', 0)}% | Total {r.get('total', 0)}%"
-        )
-
-    buf = _pdf_make(
-        title="Training Needs Distribution",
-        subtitle="PerformEdge — Download Report",
-        filters=filters,
-        lines=lines,
-    )
-    return _pdf_response("training_needs_report.pdf", buf)
 
 @router.get("/training/report")
 def training_report(
@@ -1133,7 +1110,7 @@ def overview_report(
         company_id=company_id,
         authorization=authorization,
     )
-    appraisals = appraisal_completion_status(
+    appraisals = appraisals_completion(
         date_range=date_range,
         department=department,
         location=location,
