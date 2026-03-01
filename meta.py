@@ -35,7 +35,7 @@ def _company_id_from_token(authorization: Optional[str]) -> Optional[str]:
 
 
 def _resolve_company_id(company_id_query: Optional[str], authorization: Optional[str]) -> str:
-    # 1) Query param wins (useful for local testing)
+    # 1) Query param wins
     if company_id_query:
         return company_id_query
 
