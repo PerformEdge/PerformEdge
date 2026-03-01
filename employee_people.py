@@ -47,9 +47,16 @@ def new_joiners(authorization: Optional[str] = Header(default=None), limit: int 
 
 
 @router.get("/birthdays")
-def upcoming_birthdays(authorization: Optional[str] = Header(default=None), max_days: int = 30):
+def upcoming_birthdays(
+    authorization: Optional[str] = Header(default=None),
+    max_days: int = 30,
+    days: Optional[int] = None,
+):
     payload = _require_payload(authorization)
     _require_employee(payload)
+
+    if days is not None:
+        max_days = days
 
     company_id = payload.get("company_id") or "C001"
 

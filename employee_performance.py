@@ -108,7 +108,6 @@ def my_performance_report(authorization: Optional[str] = Header(default=None)):
 
     summary = my_performance_summary(authorization)
 
-    # Lazy import (keeps backend usable even if reportlab isn't installed yet)
     try:
         from reportlab.lib.pagesizes import letter
         from reportlab.lib.units import inch
@@ -155,7 +154,7 @@ def my_performance_report(authorization: Optional[str] = Header(default=None)):
     c.drawString(0.9 * inch, y, "Cycle")
     c.drawString(3.6 * inch, y, "Score")
     c.drawString(4.4 * inch, y, "Rating")
-_get_employee_id
+
     c.setFont("Helvetica", 10)
     for row in (summary.get("history") or [])[:8]:
         y -= 0.2 * inch
