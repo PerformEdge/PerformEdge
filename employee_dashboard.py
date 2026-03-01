@@ -50,6 +50,7 @@ def employee_dashboard_overview(authorization: Optional[str] = Header(default=No
     employee = cur.fetchone() or {}
 
     # Leave summary
+
     entitlements = {
         "Annual": 14,
         "Sick": 7,
@@ -111,7 +112,6 @@ def employee_dashboard_overview(authorization: Optional[str] = Header(default=No
     total_entitled = 0
     total_used = 0
 
-    # include also any leave types used that are not in entitlements
     for lt in sorted(set(list(entitlements.keys()) + list(used_by_type.keys()))):
         total = int(entitlements.get(lt, 0))
         used = int(used_by_type.get(lt, 0))
