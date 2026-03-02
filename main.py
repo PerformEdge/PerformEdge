@@ -7,6 +7,7 @@ from performance import router as performance_router
 from signup import router as signup_router
 from forgot_password import router as forgot_password_router
 
+# Employee dashboard (split into smaller modules for readability)
 from employee_dashboard import router as employee_dashboard_router
 from employee_leave import router as employee_leave_router
 from employee_performance import router as employee_performance_router
@@ -33,8 +34,12 @@ from nopay import router as nopay_router
 
 app = FastAPI(title="PerformEdge API")
 
+# CORS so the Vite frontend can call the API locally.
 app.add_middleware(
     CORSMiddleware,
+    # For local development we allow any origin.
+    # Auth is via Bearer tokens (Authorization header), not cookies, so
+    # allow_credentials is not required.
     allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
