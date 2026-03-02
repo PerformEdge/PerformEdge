@@ -75,3 +75,56 @@ def late_by_department(start: Optional[date] = Query(None), end: Optional[date] 
     finally:
         cur.close()
         conn.close()
+
+@router.get("/7day-trend")
+def seven_day_trend(start: Optional[date] = Query(None), end: Optional[date] = Query(None), dateRange: Optional[str] = Query(None, alias='dateRange')):
+    # If dateRange supplied, respect it; otherwise use start/end or default to last 7 days
+    start_resolved, end_resolved = resolve_date_range(date_range=dateRange, start=str(start) if start else None, end=str(end) if end else None, default_days=7)
+
+    conn = get_database_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        # Get the status_id for 'Late' once
+        cur.execute("SELECT status_id FROM attendance_status_type WHERE status_name='Late' LIMIT 1")
+        status_result = cur.fetchone()
+        if not status_result:
+            # No 'Late' status found, return empty 7-day trend
+            data = []
+            for i in range(6, -1, -1):
+                day = end_resolved - timedelta(days=i)
+                data.append({"day": day.strftime("%a"), "value": 0})
+            return data
+
+        late_status_id = status_result['status_id']
+
+        cur.execute("""
+            SELECT DATE(date_of_attendance) AS trend_date,
+                   COUNT(*) AS late_count
+            FROM attendance_records
+            WHERE status_id = %s
+            AND date_of_attendance BETWEEN %s AND %s
+            GROUP BY DATE(date_of_attendance)
+            ORDER BY trend_date
+        """, (late_status_id, start_resolved, end_resolved))
+
+        fetched = cur.fetchall()
+        result_dict = {}
+        for row in fetched:
+            trend_val = row.get("trend_date")
+            # normalize to date object
+            if isinstance(trend_val, datetime):
+                trend_key = trend_val.date()
+            else:
+                trend_key = trend_val
+            result_dict[trend_key] = int(row.get("late_count", 0) or 0)
+
+        data = []
+        for i in range(6, -1, -1):
+            day = end_resolved - timedelta(days=i)
+            late_count = result_dict.get(day, 0)
+            data.append({"day": day.strftime("%a"), "value": late_count})
+
+        return data
+    finally:
+        cur.close()
+        conn.close()
