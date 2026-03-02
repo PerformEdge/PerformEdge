@@ -128,3 +128,59 @@ def seven_day_trend(start: Optional[date] = Query(None), end: Optional[date] = Q
     finally:
         cur.close()
         conn.close()
+
+# Download Report endpoints (reused helpers from attendance_location)
+@router.get("/ranking/report")
+def ranking_report(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None, alias="company_id"),
+    authorization: Optional[str] = Header(None),
+):
+    """Download a PDF report for Performance Ranking Distribution."""
+
+    data = performance_ranking(
+        date_range=date_range,
+        department=department,
+        location=location,
+        company_id=company_id,
+        authorization=authorization,
+    )
+
+    stats = (data or {}).get("stats", {})
+    chart = (data or {}).get("chart", [])
+    employees = (data or {}).get("employees", [])
+
+    filters = {
+        "Date Range": date_range or "All",
+        "Department": department or "All",
+        "Location": location or "All",
+    }
+
+    lines: List[str] = [
+        "Summary",
+        f"Average Score: {stats.get('averageScore', 0)}%",
+        f"Excellence Rate: {stats.get('excellenceRate', 0)}%",
+        f"Needs Improvement: {stats.get('needsImprovement', 0)}",
+        f"Top Performers: {stats.get('topPerformers', 0)}",
+        "",
+        "Ranking Distribution",
+    ]
+
+    for it in chart:
+        lines.append(f"- {it.get('name')}: {it.get('value')}%")
+
+    lines.extend(["", "Employee Performance Breakdown (first 50)"])
+    for r in employees[:50]:
+        lines.append(
+            f"- {r.get('name')} | {r.get('department')} | {r.get('percentage')}% | {r.get('rating')}"
+        )
+
+    buf = _pdf_make(
+        title="Performance Ranking Distribution",
+        subtitle="PerformEdge — Download Report",
+        filters=filters,
+        lines=lines,
+    )
+    return _pdf_response("performance_ranking_report.pdf", buf)
