@@ -58,6 +58,8 @@ def eim_dashboard(
     params: List = []
     dim_filters_sql = ""
     dim_params: List = []
+    start_date = None
+    end_date = None
 
     if date_range:
         start_date, end_date = resolve_date_range(date_range=date_range)
@@ -88,7 +90,7 @@ def eim_dashboard(
 
     try:
 
-        # KPIs 
+        # ================= KPIs =================
 
         cursor.execute(f"""
             SELECT COUNT(*) AS total
@@ -105,8 +107,8 @@ def eim_dashboard(
             FROM employees e
             WHERE e.company_id = %s
               {dim_filters_sql}
-                            AND YEAR(e.join_date) = YEAR(%s)
-                    """, [resolved_company_id] + dim_params + [today])
+                            {'AND e.join_date BETWEEN %s AND %s' if start_date and end_date else 'AND YEAR(e.join_date) = YEAR(%s)'}
+                                        """, ([resolved_company_id] + dim_params + [start_date.isoformat(), end_date.isoformat()]) if start_date and end_date else ([resolved_company_id] + dim_params + [today]))
 
         joiners = cursor.fetchone()["joiners"]
 
@@ -116,8 +118,8 @@ def eim_dashboard(
             WHERE e.company_id = %s
                             AND (e.employement_status = 'RESIGNED' OR e.retired_date IS NOT NULL)
               {dim_filters_sql}
-                                                        AND YEAR(COALESCE(e.retired_date, e.join_date)) = YEAR(%s)
-                    """, [resolved_company_id] + dim_params + [today])
+              {'AND COALESCE(e.retired_date, e.join_date) BETWEEN %s AND %s' if start_date and end_date else 'AND YEAR(COALESCE(e.retired_date, e.join_date)) = YEAR(%s)'}
+                    """, ([resolved_company_id] + dim_params + [start_date.isoformat(), end_date.isoformat()]) if start_date and end_date else ([resolved_company_id] + dim_params + [today]))
 
         resigned = cursor.fetchone()["resigned"]
 
@@ -131,7 +133,7 @@ def eim_dashboard(
 
         avg_years = cursor.fetchone()["avg_years"] or 0
 
-        #  GENDER 
+        # ================= GENDER =================
 
         cursor.execute(f"""
             SELECT e.gender AS label, COUNT(*) AS value
@@ -143,7 +145,7 @@ def eim_dashboard(
 
         gender = cursor.fetchall()
 
-        # AGE 
+        # ================= AGE =================
 
         cursor.execute(f"""
             SELECT
@@ -166,16 +168,16 @@ def eim_dashboard(
 
         age = cursor.fetchall()
 
-        # STAFF TREND 
+        # ================= STAFF TREND =================
 
         cursor.execute(f"""
             SELECT MONTH(join_date) AS month, COUNT(*) AS count
             FROM employees e
             WHERE e.company_id = %s
                             {dim_filters_sql}
-                            AND YEAR(e.join_date) = YEAR(%s)
+                            {'AND e.join_date BETWEEN %s AND %s' if start_date and end_date else 'AND YEAR(e.join_date) = YEAR(%s)'}
             GROUP BY MONTH(e.join_date)
-                """, tuple([resolved_company_id] + dim_params + [today]))
+                                """, tuple(([resolved_company_id] + dim_params + [start_date.isoformat(), end_date.isoformat()]) if start_date and end_date else ([resolved_company_id] + dim_params + [today])))
 
         join_map = {r["month"]: r["count"] for r in cursor.fetchall()}
 
@@ -185,9 +187,9 @@ def eim_dashboard(
             WHERE e.company_id = %s
                             AND (e.employement_status = 'RESIGNED' OR e.retired_date IS NOT NULL)
                             {dim_filters_sql}
-                            AND YEAR(COALESCE(e.retired_date, e.join_date)) = YEAR(%s)
+                            {'AND COALESCE(e.retired_date, e.join_date) BETWEEN %s AND %s' if start_date and end_date else 'AND YEAR(COALESCE(e.retired_date, e.join_date)) = YEAR(%s)'}
             GROUP BY MONTH(COALESCE(e.retired_date, e.join_date))
-                """, tuple([resolved_company_id] + dim_params + [today]))
+                                """, tuple(([resolved_company_id] + dim_params + [start_date.isoformat(), end_date.isoformat()]) if start_date and end_date else ([resolved_company_id] + dim_params + [today])))
 
         resign_map = {r["month"]: r["count"] for r in cursor.fetchall()}
 
@@ -199,7 +201,7 @@ def eim_dashboard(
             "resignations": [resign_map.get(i+1, 0) for i in range(12)],
         }
 
-        #  LOCATION 
+        # ================= LOCATION =================
 
         cursor.execute(f"""
             SELECT l.location_name AS label, COUNT(e.employee_id) AS value
@@ -214,7 +216,7 @@ def eim_dashboard(
 
         location_data = cursor.fetchall()
         
-       #  CATEGORY 
+       # ================= CATEGORY =================
 
         cursor.execute(f"""
             SELECT 
@@ -230,7 +232,7 @@ def eim_dashboard(
         category_data = cursor.fetchall()
 
         
-       #  CONTRACT TYPE 
+       # ================= CONTRACT TYPE =================
 
         cursor.execute(f"""
             SELECT 
@@ -271,7 +273,7 @@ def eim_dashboard(
         ]
 
 
-        #  BIRTHDAYS 
+        # ================= BIRTHDAYS =================
 
         birthday_filters = ""
         birthday_params: List = [resolved_company_id]
