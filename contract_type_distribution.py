@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import io
-from date_utils import resolve_date_range
+from date_utils import resolve_date_range, active_during_range_sql
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
@@ -49,15 +49,6 @@ def contract_type_distribution(
     filters = []
     params: List = [company_id]
 
-    #  DATE FILTER 
-    if date_range:
-        try:
-            start_dt, end_dt = resolve_date_range(date_range=date_range)
-            filters.append("e.join_date BETWEEN %s AND %s")
-            params.extend([start_dt.isoformat(), end_dt.isoformat()])
-        except HTTPException:
-            raise
-
     #  DEPARTMENT FILTER 
     if department:
         filters.append("e.department_id = %s")
@@ -67,6 +58,17 @@ def contract_type_distribution(
     if location:
         filters.append("e.location_id = %s")
         params.append(location)
+
+    #  DATE FILTER (active during selected period) 
+    if date_range:
+        start_date, end_date = resolve_date_range(date_range=date_range)
+        active_clause, active_params = active_during_range_sql(
+            alias="e",
+            start_date=start_date,
+            end_date=end_date,
+        )
+        filters.append(active_clause.replace(" AND ", "", 1).strip())
+        params.extend(active_params)
 
     filter_sql = ""
     if filters:
@@ -81,8 +83,8 @@ def contract_type_distribution(
             SELECT COUNT(*) AS total
             FROM employees e
             WHERE e.company_id = %s
-            AND e.employement_status = 'ACTIVE'
-            {filter_sql}
+              AND e.employement_status = 'ACTIVE'
+              {filter_sql}
         """, params)
 
         total_staff = cursor.fetchone()["total"] or 0
@@ -93,9 +95,9 @@ def contract_type_distribution(
             FROM employment_contract ec
             JOIN employees e ON e.employee_id = ec.employee_id
             WHERE e.company_id = %s
-            AND e.employement_status = 'ACTIVE'
-            AND ec.is_current = 1
-            {filter_sql}
+              AND e.employement_status = 'ACTIVE'
+              AND ec.is_current = 1
+              {filter_sql}
             GROUP BY ec.contract_type
         """, params)
 
@@ -116,7 +118,7 @@ def contract_type_distribution(
             elif ctype == "probation":
                 probation = count
 
-        # SUMMARY 
+        #  SUMMARY 
         def percentage(value):
             return round((value / total_staff) * 100, 0) if total_staff else 0
 
@@ -138,8 +140,8 @@ def contract_type_distribution(
                 ON ec.employee_id = e.employee_id
                 AND ec.is_current = 1
             WHERE e.company_id = %s
-            AND e.employement_status = 'ACTIVE'
-            {filter_sql}
+              AND e.employement_status = 'ACTIVE'
+              {filter_sql}
         """, params)
 
         employees = cursor.fetchall()

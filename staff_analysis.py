@@ -7,7 +7,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from datetime import date
 import io
-from date_utils import resolve_date_range
+from date_utils import resolve_date_range, active_during_range_sql
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
@@ -55,23 +55,28 @@ def staff_analysis(
     start_dt = None
     end_dt = None
 
-    # ---------------- DATE FILTER ----------------
+    #  DATE FILTER 
     if date_range:
         try:
             start_dt, end_dt = resolve_date_range(date_range=date_range)
-            filters_sql += " AND e.join_date BETWEEN %s AND %s "
-            params.extend([start_dt.isoformat(), end_dt.isoformat()])
+            active_clause, active_params = active_during_range_sql(
+                alias="e",
+                start_date=start_dt,
+                end_date=end_dt,
+            )
+            filters_sql += active_clause
+            params.extend(active_params)
         except HTTPException:
             raise
 
-    # ---------------- DEPARTMENT FILTER ----------------
+    #  DEPARTMENT FILTER 
     if department:
         filters_sql += " AND e.department_id = %s "
         params.append(department)
         dim_filters_sql += " AND e.department_id = %s "
         dim_params.append(department)
 
-    # ---------------- LOCATION FILTER ----------------
+    #  LOCATION FILTER 
     if location:
         filters_sql += " AND e.location_id = %s "
         params.append(location)
@@ -81,7 +86,7 @@ def staff_analysis(
     today = date.today()
 
     try:
-        # ================= KPIs =================
+        #  KPIs 
 
         cursor.execute(f"""
             SELECT COUNT(*) AS total
@@ -118,7 +123,7 @@ def staff_analysis(
         """, params)
         pending_recruit = cursor.fetchone()["pending"] or 0
 
-        #  TREND ANALYSIS
+        #  TREND 
 
         cursor.execute(f"""
             SELECT MONTH(e.join_date) AS month, COUNT(*) AS count
@@ -211,6 +216,7 @@ def staff_analysis(
     finally:
         cursor.close()
         conn.close()
+
 
 
 #  PDF GENERATOR

@@ -5,11 +5,12 @@ from database import get_database_connection
 from security import verify_token
 from fastapi.responses import StreamingResponse
 import io
-import re
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
+from date_utils import resolve_date_range, active_during_range_sql
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
+
 
 #  COMPANY RESOLUTION
 
@@ -45,20 +46,6 @@ def _resolve_company_id(
     raise HTTPException(status_code=401, detail="Company not resolved")
 
 
-def _parse_date_range(date_range: str) -> Optional[List[str]]:
-    if not date_range:
-        return None
-
-    parts = re.split(r"\s+to\s+|\.\.", date_range.strip())
-    if len(parts) != 2:
-        return None
-
-    start_str, end_str = parts[0].strip(), parts[1].strip()
-    if not start_str or not end_str:
-        return None
-
-    return [start_str, end_str]
-
 
 #  MAIN ENDPOINT
 
@@ -77,29 +64,33 @@ def location_wise_staff_distribution(
     filters_sql = ""
     params: List = []
 
-    #  DATE FILTER 
-    if date_range:
-        parsed_range = _parse_date_range(date_range)
-        if parsed_range:
-            filters_sql += " AND e.join_date BETWEEN %s AND %s "
-            params.extend(parsed_range)
-
     #  DEPARTMENT FILTER 
     if department:
         filters_sql += " AND e.department_id = %s "
         params.append(department)
 
-    # LOCATION FILTER 
+    #  LOCATION FILTER 
     if location:
         filters_sql += " AND e.location_id = %s "
         params.append(location)
+
+    #  DATE FILTER 
+    if date_range:
+        start_date, end_date = resolve_date_range(date_range=date_range)
+        active_clause, active_params = active_during_range_sql(
+            alias="e",
+            start_date=start_date,
+            end_date=end_date,
+        )
+        filters_sql += active_clause
+        params.extend(active_params)
 
     conn = get_database_connection()
     cursor = conn.cursor(dictionary=True)
 
     try:
 
-        # TOTAL STAFF 
+        #  TOTAL STAFF 
         cursor.execute(f"""
             SELECT COUNT(*) AS total
             FROM employees e
@@ -110,7 +101,7 @@ def location_wise_staff_distribution(
 
         total_staff = cursor.fetchone()["total"] or 0
 
-        #  LOCATION DISTRIBUTION
+        # LOCATION DISTRIBUTION 
         cursor.execute(f"""
             SELECT 
                 l.location_name AS location,
@@ -127,7 +118,7 @@ def location_wise_staff_distribution(
 
         location_data = cursor.fetchall()
 
-        #  EMPLOYEE TABLE 
+        # EMPLOYEE TABLE 
         cursor.execute(f"""
             SELECT
                 e.full_name AS name,

@@ -7,12 +7,11 @@ from fastapi.responses import StreamingResponse
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import io
-import re
+from date_utils import resolve_date_range, active_during_range_sql
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
 #  COMPANY RESOLUTION (SECURE)
-
 
 def _get_company_id(authorization: Optional[str]) -> str:
     if not authorization:
@@ -30,20 +29,6 @@ def _get_company_id(authorization: Optional[str]) -> str:
 
     return company_id
 
-
-def _parse_date_range(date_range: str) -> Optional[List[str]]:
-    if not date_range:
-        return None
-
-    parts = re.split(r"\s+to\s+|\.\.", date_range.strip())
-    if len(parts) != 2:
-        return None
-
-    start_str, end_str = parts[0].strip(), parts[1].strip()
-    if not start_str or not end_str:
-        return None
-
-    return [start_str, end_str]
 
 
 #  BUSINESS LOGIC (REUSABLE FUNCTION)
@@ -64,13 +49,6 @@ def _get_service_year_data(
     filters_sql = " WHERE e.company_id = %s "
     params: List = [company_id]
 
-    # DATE FILTER
-    if date_range:
-        parsed_range = _parse_date_range(date_range)
-        if parsed_range:
-            filters_sql += " AND e.join_date BETWEEN %s AND %s "
-            params.extend(parsed_range)
-
     # DEPARTMENT FILTER
     if department:
         filters_sql += " AND e.department_id = %s "
@@ -80,6 +58,17 @@ def _get_service_year_data(
     if location:
         filters_sql += " AND e.location_id = %s "
         params.append(location)
+
+    # DATE FILTER (employees active during selected period)
+    if date_range:
+        start_date, end_date = resolve_date_range(date_range=date_range)
+        active_clause, active_params = active_during_range_sql(
+            alias="e",
+            start_date=start_date,
+            end_date=end_date,
+        )
+        filters_sql += active_clause
+        params.extend(active_params)
 
     #  DISTRIBUTION 
     cursor.execute(f"""
@@ -124,7 +113,7 @@ def _get_service_year_data(
 
     loyalty_index = cursor.fetchone()["loyalty"] or 0
 
-    # TOP LONG SERVING 
+    #  TOP LONG SERVING 
     cursor.execute(f"""
         SELECT
             e.full_name AS name,
@@ -137,7 +126,7 @@ def _get_service_year_data(
 
     top_long_serving = cursor.fetchall()
 
-    #  STAFF TABLE
+    #  STAFF TABLE 
     cursor.execute(f"""
         SELECT
             e.full_name AS name,
@@ -163,7 +152,6 @@ def _get_service_year_data(
         "top_long_serving": top_long_serving,
         "staff": staff,
     }
-
 
 
 #  API ENDPOINT

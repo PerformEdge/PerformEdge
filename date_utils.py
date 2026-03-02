@@ -12,7 +12,7 @@ contains ISO dates and extract them with a regex.
 
 import re
 from datetime import date, datetime, timedelta
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 from fastapi import HTTPException
 
@@ -96,3 +96,21 @@ def resolve_date_range(
         raise HTTPException(status_code=400, detail="Start date must be before or equal to end date")
     
     return start_date, end_date
+
+
+def active_during_range_sql(
+    *,
+    alias: str,
+    start_date: date,
+    end_date: date,
+    join_col: str = "join_date",
+    retired_col: str = "retired_date",
+) -> Tuple[str, List[str]]:
+    """Build SQL clause/params for employees active at any time in [start_date, end_date]."""
+
+    clause = (
+        f" AND {alias}.{join_col} <= %s "
+        f" AND ({alias}.{retired_col} IS NULL OR {alias}.{retired_col} >= %s) "
+    )
+    params = [end_date.isoformat(), start_date.isoformat()]
+    return clause, params
