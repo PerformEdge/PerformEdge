@@ -347,3 +347,121 @@ def eim_dashboard(
     finally:
         cursor.close()
         conn.close()
+
+#  PDF REPORT
+
+
+def _pdf_make(
+    *,
+    title: str,
+    subtitle: str = "",
+    filters: Optional[Dict[str, str]] = None,
+    lines: Optional[List[str]] = None,
+) -> io.BytesIO:
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    width, height = letter
+
+    x = 48
+    y = height - 56
+
+    # Title
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(x, y, title)
+    y -= 22
+
+    # Subtitle
+    if subtitle:
+        c.setFont("Helvetica", 10)
+        c.drawString(x, y, subtitle)
+        y -= 18
+
+    # Filters
+    if filters:
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(x, y, "Filters")
+        y -= 14
+        c.setFont("Helvetica", 10)
+
+        for k, v in filters.items():
+            if y < 72:
+                c.showPage()
+                y = height - 56
+            c.drawString(x, y, f"{k}: {v}")
+            y -= 13
+
+        y -= 6
+
+    # Content
+    c.setFont("Helvetica", 10)
+
+    for line in (lines or []):
+        if y < 72:
+            c.showPage()
+            y = height - 56
+            c.setFont("Helvetica", 10)
+        c.drawString(x, y, str(line))
+        y -= 13
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+def _pdf_response(filename: str, buf: io.BytesIO) -> StreamingResponse:
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )
+
+
+@router.get("/dashboard/report")
+def dashboard_report(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
+):
+
+    data = eim_dashboard(company_id=company_id, authorization=authorization, date_range=date_range, department=department, location=location)
+    filters = {
+        "Date Range": date_range or "All",
+        "Department": department or "All",
+        "Location": location or "All",
+    }
+
+    lines = [
+        f"{k.replace('_', ' ').title()}: {v}"
+        for k, v in data["kpis"].items()
+    ]
+    for emp in data.get("employees", []):
+        lines.append(f"{emp['full_name']} - {emp['department']} - {emp['location']}")
+        
+    for c in data.get("charts", {}).get("contract_type", []):
+        lines.append(f"{c['label']}: {c['percentage']}%")
+        
+    for c in data.get("charts", {}).get("category", []):
+        lines.append(f"{c['label']}: {c['value']}")
+    for c in data.get("charts", {}).get("location", []):
+        lines.append(f"{c['label']}: {c['value']}")
+        
+    for c in data.get("charts", {}).get("gender", []):
+        lines.append(f"{c['label']}: {c['value']}")
+        
+    for c in data.get("charts", {}).get("age", []):
+        lines.append(f"{c['label']}: {c['value']}")
+        
+    
+    buf = _pdf_make(
+        title="Location-wise Staff Distribution",
+        subtitle=f"Generated on {date.today().isoformat()}",
+        filters=filters,
+        lines=lines,
+    )
+
+    return _pdf_response("eim_dashboard_report.pdf", buf)
