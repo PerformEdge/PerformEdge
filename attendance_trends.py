@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime, timedelta
 from typing import Optional
+import re
 
 from database import get_database_connection
 from attendance_location import _pdf_make, _pdf_response
@@ -36,6 +37,7 @@ def absentee_last_5_days(start: Optional[str] = Query(None), end: Optional[str] 
         cur.close()
         conn.close()
 
+
 # --- Download Report for Attendance Trends ---
 @router.get("/report")
 def attendance_trends_report(
@@ -49,9 +51,9 @@ def attendance_trends_report(
 
     # reuse existing endpoints data
     last5 = absentee_last_5_days(start=start, end=end, dateRange=dateRange)
-    avg = avg_absentee_by_dept(start=start, end=end, dateRange=dateRange, department=department)
-    daily = daily_absentee_by_dept(start=start, end=end, dateRange=dateRange, department=department)
-    breakdown = department_breakdown(start=start, end=end, dateRange=dateRange, department=department)
+    avg = avg_absentee_by_dept(start=start, end=end, dateRange=dateRange, department=department, location=location)
+    daily = daily_absentee_by_dept(start=start, end=end, dateRange=dateRange, department=department, location=location)
+    breakdown = department_breakdown(start=start, end=end, dateRange=dateRange, department=department, location=location)
 
     filters = {
         "Start": start or dateRange or "All",
@@ -97,7 +99,7 @@ def attendance_trends_report(
 
 # --- Avg absentee by department ---
 @router.get("/avg-by-department")
-def avg_absentee_by_dept(start: Optional[str] = Query(None), end: Optional[str] = Query(None), dateRange: Optional[str] = Query(None, alias="dateRange"), department: Optional[str] = Query(None)):
+def avg_absentee_by_dept(start: Optional[str] = Query(None), end: Optional[str] = Query(None), dateRange: Optional[str] = Query(None, alias="dateRange"), department: Optional[str] = Query(None), location: Optional[str] = Query(None)):
     """Get average absentee rate by department"""
     start_date, end_date = resolve_date_range(date_range=dateRange, start=start, end=end, default_days=7)
     
@@ -112,14 +114,19 @@ def avg_absentee_by_dept(start: Optional[str] = Query(None), end: Optional[str] 
             FROM attendance_records ar
             JOIN employees e ON e.employee_id = ar.employee_id
             JOIN departments d ON d.department_id = e.department_id
+            JOIN locations l ON l.location_id = e.location_id
             JOIN attendance_status_type ast ON ast.status_id = ar.status_id
             WHERE ar.date_of_attendance BETWEEN %s AND %s
         """
         params = [start_date, end_date]
         
-        if department:
+        if department and department != "All":
             query += " AND d.department_name = %s"
             params.append(department)
+
+        if location and location != "All":
+            query += " AND l.location_name = %s"
+            params.append(location)
         
         query += " GROUP BY d.department_name ORDER BY rate DESC"
         
@@ -133,7 +140,7 @@ def avg_absentee_by_dept(start: Optional[str] = Query(None), end: Optional[str] 
 
 # --- Daily absentee by department ---
 @router.get("/daily-by-department")
-def daily_absentee_by_dept(start: Optional[str] = Query(None), end: Optional[str] = Query(None), dateRange: Optional[str] = Query(None, alias="dateRange"), department: Optional[str] = Query(None)):
+def daily_absentee_by_dept(start: Optional[str] = Query(None), end: Optional[str] = Query(None), dateRange: Optional[str] = Query(None, alias="dateRange"), department: Optional[str] = Query(None), location: Optional[str] = Query(None)):
     """Get daily absentee trends by department"""
     start_date, end_date = resolve_date_range(date_range=dateRange, start=start, end=end, default_days=7)
     
@@ -148,15 +155,20 @@ def daily_absentee_by_dept(start: Optional[str] = Query(None), end: Optional[str
             FROM attendance_records ar
             JOIN employees e ON e.employee_id = ar.employee_id
             JOIN departments d ON d.department_id = e.department_id
+                        JOIN locations l ON l.location_id = e.location_id
             JOIN attendance_status_type ast ON ast.status_id = ar.status_id
             WHERE ast.status_name='Absent'
               AND ar.date_of_attendance BETWEEN %s AND %s
         """
         params = [start_date, end_date]
         
-        if department:
+        if department and department != "All":
             query += " AND d.department_name = %s"
             params.append(department)
+
+        if location and location != "All":
+            query += " AND l.location_name = %s"
+            params.append(location)
         
         query += " GROUP BY d.department_name, ar.date_of_attendance ORDER BY d.department_name, ar.date_of_attendance"
         
@@ -196,7 +208,7 @@ def daily_absentee_by_dept(start: Optional[str] = Query(None), end: Optional[str
 
 # --- Department breakdown table ---
 @router.get("/dept-breakdown")
-def department_breakdown(start: Optional[str] = Query(None), end: Optional[str] = Query(None), dateRange: Optional[str] = Query(None, alias="dateRange"), department: Optional[str] = Query(None)):
+def department_breakdown(start: Optional[str] = Query(None), end: Optional[str] = Query(None), dateRange: Optional[str] = Query(None, alias="dateRange"), department: Optional[str] = Query(None), location: Optional[str] = Query(None)):
     """Get detailed department breakdown with daily absent counts"""
     start_date, end_date = resolve_date_range(date_range=dateRange, start=start, end=end, default_days=7)
     
@@ -213,6 +225,7 @@ def department_breakdown(start: Optional[str] = Query(None), end: Optional[str] 
                    SUM(CASE WHEN DAYNAME(ar.date_of_attendance)='Friday' AND ast.status_name='Absent' THEN 1 ELSE 0 END) AS fri
             FROM employees e
             JOIN departments d ON d.department_id = e.department_id
+                 JOIN locations l ON l.location_id = e.location_id
             LEFT JOIN attendance_records ar 
                    ON ar.employee_id = e.employee_id 
                    AND ar.date_of_attendance BETWEEN %s AND %s
@@ -221,9 +234,13 @@ def department_breakdown(start: Optional[str] = Query(None), end: Optional[str] 
         """
         params = [start_date, end_date]
         
-        if department:
+        if department and department != "All":
             query += " AND d.department_name = %s"
             params.append(department)
+
+        if location and location != "All":
+            query += " AND l.location_name = %s"
+            params.append(location)
         
         query += " GROUP BY d.department_name ORDER BY staff DESC"
         
@@ -255,4 +272,3 @@ def get_departments():
     finally:
         cur.close()
         conn.close()
-
