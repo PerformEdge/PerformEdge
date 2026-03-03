@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import io
-from date_utils import resolve_date_range
+from date_utils import resolve_date_range, active_during_range_sql
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
@@ -53,15 +53,6 @@ def category_distribution(
     filters = []
     params: List = [company_id]
 
-    # -------- DATE FILTER --------
-    if date_range:
-        try:
-            start_dt, end_dt = resolve_date_range(date_range=date_range)
-            filters.append("e.join_date BETWEEN %s AND %s")
-            params.extend([start_dt.isoformat(), end_dt.isoformat()])
-        except HTTPException:
-            raise
-
     # -------- DEPARTMENT FILTER --------
     if department:
         filters.append("e.department_id = %s")
@@ -71,6 +62,17 @@ def category_distribution(
     if location:
         filters.append("e.location_id = %s")
         params.append(location)
+
+    # -------- DATE FILTER (active during selected period) --------
+    if date_range:
+        start_date, end_date = resolve_date_range(date_range=date_range)
+        active_clause, active_params = active_during_range_sql(
+            alias="e",
+            start_date=start_date,
+            end_date=end_date,
+        )
+        filters.append(active_clause.replace(" AND ", "", 1).strip())
+        params.extend(active_params)
 
     filter_sql = ""
     if filters:
