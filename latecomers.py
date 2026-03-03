@@ -224,3 +224,116 @@ def ranking_report(
         lines=lines,
     )
     return _pdf_response("performance_ranking_report.pdf", buf)
+
+@router.get("/training/report")
+def training_report(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None, alias="company_id"),
+    authorization: Optional[str] = Header(None),
+):
+    """Download a PDF report for Training Needs Distribution."""
+
+    data = training_needs(
+        date_range=date_range,
+        department=department,
+        location=location,
+        company_id=company_id,
+        authorization=authorization,
+    )
+
+    stats = (data or {}).get("stats", {})
+    bars = (data or {}).get("bars", [])
+    rows = (data or {}).get("table", [])
+
+    filters = {
+        "Date Range": date_range or "All",
+        "Department": department or "All",
+        "Location": location or "All",
+    }
+
+    lines: List[str] = [
+        "Summary",
+        f"Total Employees: {stats.get('totalEmployees', 0)}",
+        f"Employees Need Training: {stats.get('employeesNeedTraining', 0)}",
+        f"Top Training Category: {stats.get('topTrainingCategory', '-')}",
+        f"Average Training Completion: {stats.get('avgTrainingCompletion', 0)}%",
+        "",
+        "Training Category Distribution",
+    ]
+
+    for b in bars:
+        lines.append(f"- {b.get('name')}: {b.get('value')}%")
+
+    lines.extend(["", "Employee Breakdown (first 50)"])
+    for r in rows[:50]:
+        lines.append(
+            f"- {r.get('name')} | {r.get('department')} | Tech {r.get('technical', 0)}% | Soft {r.get('softSkills', 0)}% | Leadership {r.get('leadership', 0)}% | Compliance {r.get('compliance', 0)}% | Total {r.get('total', 0)}%"
+        )
+
+    buf = _pdf_make(
+        title="Training Needs Distribution",
+        subtitle="PerformEdge — Download Report",
+        filters=filters,
+        lines=lines,
+    )
+    return _pdf_response("training_needs_report.pdf", buf)
+
+
+@router.get("/appraisals/report")
+def appraisals_report(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None, alias="company_id"),
+    authorization: Optional[str] = Header(None),
+):
+    """Download a PDF report for Appraisals Completion Status."""
+
+    data = appraisals_completion(
+        date_range=date_range,
+        department=department,
+        location=location,
+        company_id=company_id,
+        authorization=authorization,
+    )
+
+    stats = (data or {}).get("stats", {})
+    chart = (data or {}).get("chart", [])
+    rows = (data or {}).get("rows", [])
+
+    filters = {
+        "Date Range": date_range or "All",
+        "Department": department or "All",
+        "Location": location or "All",
+    }
+
+    lines: List[str] = [
+        "Summary",
+        f"Total Employees: {stats.get('totalEmployees', 0)}",
+        f"Appraisals Completed: {stats.get('appraisalsCompleted', 0)}",
+        f"Pending Appraisals: {stats.get('pendingAppraisals', 0)}",
+        f"Completion Rate: {stats.get('completionRate', 0)}%",
+        "",
+        "Completion Distribution",
+    ]
+
+    for it in chart:
+        lines.append(f"- {it.get('name')}: {it.get('value')}%")
+
+    lines.extend(["", "Employee Appraisal Status (first 50)"])
+    for r in rows[:50]:
+        score = r.get("score")
+        score_txt = str(score) if score is not None else "-"
+        lines.append(
+            f"- {r.get('name')} | {r.get('department')} | {r.get('status')} | Score {score_txt} | {r.get('completionPct')}%"
+        )
+
+    buf = _pdf_make(
+        title="Appraisals Completion Status",
+        subtitle="PerformEdge — Download Report",
+        filters=filters,
+        lines=lines,
+    )
+    return _pdf_response("appraisals_completion_report.pdf", buf)
