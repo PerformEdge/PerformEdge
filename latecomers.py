@@ -15,15 +15,26 @@ def late_summary(start: Optional[date] = Query(None), end: Optional[date] = Quer
     conn = get_database_connection()
     cur = conn.cursor(dictionary=True)
     try:
+        filter_sql = ""
+        params = [start_resolved, end_resolved]
+        if department and department != "All":
+            filter_sql += " AND d.department_name = %s"
+            params.append(department)
+        if location and location != "All":
+            filter_sql += " AND l.location_name = %s"
+            params.append(location)
+
         cur.execute("""
             SELECT COUNT(*) AS total_late,
                    0 AS avg_minutes
-            FROM attendance_records
-            WHERE status_id IN (
-              SELECT status_id FROM attendance_status_type WHERE status_name='Late'
-            )
-            AND date_of_attendance BETWEEN %s AND %s
-        """, (start_resolved, end_resolved))
+            FROM attendance_records ar
+            JOIN attendance_status_type ast ON ast.status_id = ar.status_id
+            JOIN employees e ON e.employee_id = ar.employee_id
+            LEFT JOIN departments d ON d.department_id = e.department_id
+            LEFT JOIN locations l ON l.location_id = e.location_id
+            WHERE ast.status_name='Late'
+            AND ar.date_of_attendance BETWEEN %s AND %s
+        """ + filter_sql, tuple(params))
         result = cur.fetchone()
         if result is None:
             return {"total_late": 0, "avg_minutes": 0}
@@ -39,11 +50,20 @@ def late_summary(start: Optional[date] = Query(None), end: Optional[date] = Quer
 
 
 @router.get("/by-department")
-def late_by_department(start: Optional[date] = Query(None), end: Optional[date] = Query(None), dateRange: Optional[str] = Query(None, alias='dateRange'), department: Optional[str] = Query(None)):
+def late_by_department(start: Optional[date] = Query(None), end: Optional[date] = Query(None), dateRange: Optional[str] = Query(None, alias='dateRange'), department: Optional[str] = Query(None), location: Optional[str] = Query(None)):
     start_resolved, end_resolved = resolve_date_range(date_range=dateRange, start=str(start) if start else None, end=str(end) if end else None, default_days=7)
     conn = get_database_connection()
     cur = conn.cursor(dictionary=True)
     try:
+        filter_sql = ""
+        params = [start_resolved, end_resolved]
+        if department and department != "All":
+            filter_sql += " AND d.department_name = %s"
+            params.append(department)
+        if location and location != "All":
+            filter_sql += " AND l.location_name = %s"
+            params.append(location)
+
         cur.execute("""
             SELECT d.department_name,
                    COUNT(*) AS late_count,
@@ -53,13 +73,14 @@ def late_by_department(start: Optional[date] = Query(None), end: Optional[date] 
             FROM attendance_records ar
             JOIN employees e ON e.employee_id=ar.employee_id
             JOIN departments d ON d.department_id=e.department_id
-            WHERE ar.status_id IN (
-              SELECT status_id FROM attendance_status_type WHERE status_name='Late'
-            )
+            JOIN attendance_status_type ast ON ast.status_id = ar.status_id
+            LEFT JOIN locations l ON l.location_id = e.location_id
+            WHERE ast.status_name='Late'
             AND ar.date_of_attendance BETWEEN %s AND %s
+        """ + filter_sql + """
             GROUP BY d.department_id, d.department_name
             ORDER BY rate DESC
-        """, (start_resolved, end_resolved))
+        """, tuple(params))
         rows = cur.fetchall()
         # normalize numeric types for JSON serialization
         normalized = []
@@ -76,8 +97,9 @@ def late_by_department(start: Optional[date] = Query(None), end: Optional[date] 
         cur.close()
         conn.close()
 
+
 @router.get("/7day-trend")
-def seven_day_trend(start: Optional[date] = Query(None), end: Optional[date] = Query(None), dateRange: Optional[str] = Query(None, alias='dateRange')):
+def seven_day_trend(start: Optional[date] = Query(None), end: Optional[date] = Query(None), dateRange: Optional[str] = Query(None, alias='dateRange'), department: Optional[str] = Query(None), location: Optional[str] = Query(None)):
     # If dateRange supplied, respect it; otherwise use start/end or default to last 7 days
     start_resolved, end_resolved = resolve_date_range(date_range=dateRange, start=str(start) if start else None, end=str(end) if end else None, default_days=7)
 
@@ -97,15 +119,28 @@ def seven_day_trend(start: Optional[date] = Query(None), end: Optional[date] = Q
 
         late_status_id = status_result['status_id']
 
+        filter_sql = ""
+        params = [late_status_id, start_resolved, end_resolved]
+        if department and department != "All":
+            filter_sql += " AND d.department_name = %s"
+            params.append(department)
+        if location and location != "All":
+            filter_sql += " AND l.location_name = %s"
+            params.append(location)
+
         cur.execute("""
             SELECT DATE(date_of_attendance) AS trend_date,
                    COUNT(*) AS late_count
-            FROM attendance_records
-            WHERE status_id = %s
-            AND date_of_attendance BETWEEN %s AND %s
+            FROM attendance_records ar
+            JOIN employees e ON e.employee_id = ar.employee_id
+            LEFT JOIN departments d ON d.department_id = e.department_id
+            LEFT JOIN locations l ON l.location_id = e.location_id
+            WHERE ar.status_id = %s
+            AND ar.date_of_attendance BETWEEN %s AND %s
+        """ + filter_sql + """
             GROUP BY DATE(date_of_attendance)
             ORDER BY trend_date
-        """, (late_status_id, start_resolved, end_resolved))
+        """, tuple(params))
 
         fetched = cur.fetchall()
         result_dict = {}
@@ -129,7 +164,12 @@ def seven_day_trend(start: Optional[date] = Query(None), end: Optional[date] = Q
         cur.close()
         conn.close()
 
+
+# -----------------------------------------------------------------------------
 # Download Report endpoints (reused helpers from attendance_location)
+# -----------------------------------------------------------------------------
+
+
 @router.get("/ranking/report")
 def ranking_report(
     date_range: str = Query("", alias="dateRange"),
