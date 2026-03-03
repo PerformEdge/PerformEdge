@@ -5,9 +5,9 @@ from database import get_database_connection
 from security import verify_token
 from fastapi.responses import StreamingResponse
 import io
-from date_utils import resolve_date_range
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
+from date_utils import resolve_date_range, active_during_range_sql
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
@@ -71,15 +71,17 @@ def age_analysis(
     if location:
         filters_sql += " AND e.location_id = %s "
         params.append(location)
-        
-    if date_range:
-        try:
-            start_dt, end_dt = resolve_date_range(date_range=date_range)
-            filters_sql += " AND e.join_date BETWEEN %s AND %s "
-            params.extend([start_dt.isoformat(), end_dt.isoformat()])
-        except HTTPException:
-            raise
 
+    if date_range:
+        start_date, end_date = resolve_date_range(date_range=date_range)
+        active_clause, active_params = active_during_range_sql(
+            alias="e",
+            start_date=start_date,
+            end_date=end_date,
+        )
+        filters_sql += active_clause
+        params.extend(active_params)
+        
     conn = get_database_connection()
     cursor = conn.cursor(dictionary=True)
 
