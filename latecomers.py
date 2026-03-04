@@ -225,6 +225,7 @@ def ranking_report(
     )
     return _pdf_response("performance_ranking_report.pdf", buf)
 
+
 @router.get("/training/report")
 def training_report(
     date_range: str = Query("", alias="dateRange"),
@@ -338,6 +339,7 @@ def appraisals_report(
     )
     return _pdf_response("appraisals_completion_report.pdf", buf)
 
+
 @router.get("/overview/report")
 def overview_report(
     date_range: str = Query("", alias="dateRange"),
@@ -429,6 +431,7 @@ def overview_report(
     )
     return _pdf_response("performance_overview_report.pdf", buf)
 
+
 # -----------------------------------------------------------------------------
 # Latecomers PDF report (Department Wise / 7-day trend)
 # -----------------------------------------------------------------------------
@@ -454,8 +457,8 @@ def latecomers_report(
         # reuse existing endpoints/data functions (pass through filters)
         # pass dateRange=None explicitly to avoid FastAPI Query default objects when calling directly
         summary = late_summary(start=start, end=end, dateRange=None, department=department, location=location)
-        dept = late_by_department(start=start, end=end, dateRange=None, department=department)
-        trend = seven_day_trend(start=start, end=end, dateRange=None)
+        dept = late_by_department(start=start, end=end, dateRange=None, department=department, location=location)
+        trend = seven_day_trend(start=start, end=end, dateRange=None, department=department, location=location)
 
         filters = {
             "Start Date": str(start),
@@ -486,6 +489,7 @@ def latecomers_report(
         buf = _pdf_make(
             title="Late Arrival Percentage (Department Wise)",
             subtitle="Attendance — Download Report",
+            filters=filters,
             lines=lines,
         )
 
