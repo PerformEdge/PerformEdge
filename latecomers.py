@@ -428,3 +428,68 @@ def overview_report(
         lines=lines,
     )
     return _pdf_response("performance_overview_report.pdf", buf)
+
+# -----------------------------------------------------------------------------
+# Latecomers PDF report (Department Wise / 7-day trend)
+# -----------------------------------------------------------------------------
+
+
+@router.get("/report")
+def latecomers_report(
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+    department: str = "",
+    location: str = "",
+    company_id: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+):
+    """Download a PDF report for Late Arrival Percentage (Department Wise)."""
+    try:
+        # default to last 7 days if not provided
+        if end is None:
+            end = date.today()
+        if start is None:
+            start = end - timedelta(days=6)
+
+        # reuse existing endpoints/data functions (pass through filters)
+        # pass dateRange=None explicitly to avoid FastAPI Query default objects when calling directly
+        summary = late_summary(start=start, end=end, dateRange=None, department=department, location=location)
+        dept = late_by_department(start=start, end=end, dateRange=None, department=department)
+        trend = seven_day_trend(start=start, end=end, dateRange=None)
+
+        filters = {
+            "Start Date": str(start),
+            "End Date": str(end),
+            "Department": department or "All",
+            "Location": location or "All",
+        }
+
+        lines: List[str] = []
+        lines.append("Latecomers Summary")
+        lines.append(f"Total Late: {summary.get('total_late', 0)}")
+        lines.append(f"Avg Minutes Late: {summary.get('avg_minutes', 0)}")
+        lines.append("")
+        lines.append("7-Day Trend")
+        for t in trend:
+            lines.append(f"- {t.get('day')}: {t.get('value')} late arrivals")
+
+        lines.append("")
+        lines.append("Department Late %")
+        for d in dept:
+            lines.append(f"- {d.get('department_name')}: {d.get('rate')}% ({d.get('late_count')} / {d.get('total_staff')})")
+
+        lines.append("")
+        lines.append("Detailed Department Breakdown (first 50)")
+        for r in dept[:50]:
+            lines.append(f"- {r.get('department_name')} | Total {r.get('total_staff')} | Late {r.get('late_count')} | {r.get('rate')}% | Avg {r.get('avg_minutes')} min")
+
+        buf = _pdf_make(
+            title="Late Arrival Percentage (Department Wise)",
+            subtitle="Attendance — Download Report",
+            lines=lines,
+        )
+
+        return _pdf_response("late_arrival_department_report.pdf", buf)
+    except Exception as e:
+        # return readable error for debugging in dev
+        raise HTTPException(status_code=500, detail=f"Latecomers report error: {str(e)}")
