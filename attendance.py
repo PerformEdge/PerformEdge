@@ -1,10 +1,14 @@
-rom fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException
 from datetime import date, datetime, timedelta
 from typing import Optional
 import re
+import io
 
 from database import get_database_connection
 from date_utils import resolve_date_range
+from fastapi.responses import StreamingResponse
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
