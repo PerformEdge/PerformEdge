@@ -42,6 +42,13 @@ def _pdf_make(*, title: str, subtitle: str = "", lines: Optional[list] = None) -
     buf.seek(0)
     return buf
 
+def _pdf_response(filename: str, buf: io.BytesIO) -> StreamingResponse:
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
 
 @router.get("/summary")
 def attendance_summary(
