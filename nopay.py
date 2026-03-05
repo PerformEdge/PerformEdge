@@ -75,3 +75,84 @@ def no_pay_summary(start: Optional[date] = Query(None), end: Optional[date] = Qu
     finally:
         cur.close()
         conn.close()
+
+@router.get("/by-department")
+def no_pay_by_department(start: Optional[date] = Query(None), end: Optional[date] = Query(None), dateRange: Optional[str] = Query(None, alias='dateRange'), department: Optional[str] = Query(None), location: Optional[str] = Query(None)):
+    start_resolved, end_resolved = resolve_date_range(date_range=dateRange, start=str(start) if start else None, end=str(end) if end else None, default_days=14)
+    conn = get_database_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        filter_sql = ""
+        filter_params = []
+        if department and department != "All":
+            filter_sql += " AND d.department_name = %s"
+            filter_params.append(department)
+        if location and location != "All":
+            filter_sql += " AND l.location_name = %s"
+            filter_params.append(location)
+
+        # First get total NoPay days
+        cur.execute("""
+            SELECT COUNT(*) as total
+            FROM leave_records lr
+            JOIN employees e ON e.employee_id = lr.employee_id
+            JOIN departments d ON d.department_id = e.department_id
+            LEFT JOIN locations l ON l.location_id = e.location_id
+            WHERE LOWER(leave_type) LIKE '%no%pay%'
+            AND started_date BETWEEN %s AND %s
+        """ + filter_sql, tuple([start_resolved, end_resolved] + filter_params))
+        total_row = cur.fetchone()
+        total_nopay = total_row["total"] if total_row and total_row.get("total") else 1
+        
+        cur.execute("""
+            SELECT d.department_name,
+                   COUNT(*) AS no_pay_days,
+                   ROUND(COUNT(*) / %s * 100, 1) AS no_pay_percentage
+            FROM leave_records lr
+            JOIN employees e ON e.employee_id=lr.employee_id
+            JOIN departments d ON d.department_id=e.department_id
+            LEFT JOIN locations l ON l.location_id = e.location_id
+            WHERE LOWER(lr.leave_type) LIKE '%no%pay%'
+            AND lr.started_date BETWEEN %s AND %s
+        """ + filter_sql + """
+            GROUP BY d.department_name
+        """, tuple([total_nopay, start_resolved, end_resolved] + filter_params))
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/distribution")
+def no_pay_distribution(start: Optional[date] = Query(None), end: Optional[date] = Query(None), dateRange: Optional[str] = Query(None, alias='dateRange'), department: Optional[str] = Query(None), location: Optional[str] = Query(None)):
+    conn = get_database_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        # resolve dates using shared utility
+        start_resolved, end_resolved = resolve_date_range(date_range=dateRange, start=str(start) if start else None, end=str(end) if end else None, default_days=14)
+
+        filter_sql = ""
+        params = [start_resolved, end_resolved]
+        if department and department != "All":
+            filter_sql += " AND d.department_name = %s"
+            params.append(department)
+        if location and location != "All":
+            filter_sql += " AND l.location_name = %s"
+            params.append(location)
+
+        cur.execute("""
+            SELECT d.department_name, COUNT(*) AS days
+            FROM leave_records lr
+            JOIN employees e ON e.employee_id=lr.employee_id
+            JOIN departments d ON d.department_id=e.department_id
+            LEFT JOIN locations l ON l.location_id = e.location_id
+            WHERE LOWER(lr.leave_type) LIKE '%no%pay%'
+            AND lr.started_date BETWEEN %s AND %s
+        """ + filter_sql + """
+            GROUP BY d.department_name
+            ORDER BY days DESC
+        """, tuple(params))
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
