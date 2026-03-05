@@ -12,6 +12,36 @@ from reportlab.lib.pagesizes import letter
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
+def _pdf_make(*, title: str, subtitle: str = "", lines: Optional[list] = None) -> io.BytesIO:
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    width, height = letter
+
+    x = 48
+    y = height - 56
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(x, y, title)
+    y -= 22
+
+    if subtitle:
+        c.setFont("Helvetica", 10)
+        c.drawString(x, y, subtitle)
+        y -= 18
+
+    c.setFont("Helvetica", 10)
+    for line in (lines or []):
+        if y < 72:
+            c.showPage()
+            y = height - 56
+            c.setFont("Helvetica", 10)
+        c.drawString(x, y, str(line))
+        y -= 13
+
+    c.save()
+    buf.seek(0)
+    return buf
+
 
 @router.get("/summary")
 def attendance_summary(
