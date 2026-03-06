@@ -76,6 +76,7 @@ def no_pay_summary(start: Optional[date] = Query(None), end: Optional[date] = Qu
         cur.close()
         conn.close()
 
+
 @router.get("/by-department")
 def no_pay_by_department(start: Optional[date] = Query(None), end: Optional[date] = Query(None), dateRange: Optional[str] = Query(None, alias='dateRange'), department: Optional[str] = Query(None), location: Optional[str] = Query(None)):
     start_resolved, end_resolved = resolve_date_range(date_range=dateRange, start=str(start) if start else None, end=str(end) if end else None, default_days=14)
@@ -156,6 +157,7 @@ def no_pay_distribution(start: Optional[date] = Query(None), end: Optional[date]
     finally:
         cur.close()
         conn.close()
+
 
 @router.get("/details")
 def no_pay_details(start: Optional[date] = Query(None), end: Optional[date] = Query(None), dateRange: Optional[str] = Query(None, alias='dateRange'), department: Optional[str] = Query(None), location: Optional[str] = Query(None)):
