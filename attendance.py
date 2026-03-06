@@ -211,6 +211,6 @@ def attendance_summary(
             "locations": locations
         }
 
-        finally:
+    finally:
         cur.close()
         conn.close()
