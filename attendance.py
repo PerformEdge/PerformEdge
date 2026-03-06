@@ -49,6 +49,28 @@ def _pdf_response(filename: str, buf: io.BytesIO) -> StreamingResponse:
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
+@router.get("/latest-date")
+def attendance_latest_date(default_days: int = Query(5, ge=1, le=31)):
+    conn = get_database_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("SELECT MAX(date_of_attendance) AS latest_date FROM attendance_records")
+        row = cur.fetchone() or {}
+        latest_date = row.get("latest_date")
+
+        if latest_date is None:
+            latest_date = date.today()
+
+        start_date = latest_date - timedelta(days=default_days - 1)
+        return {
+            "start": start_date.isoformat(),
+            "end": latest_date.isoformat(),
+            "latest": latest_date.isoformat()
+        }
+    finally:
+        cur.close()
+        conn.close()
+
 
 @router.get("/summary")
 def attendance_summary(
