@@ -221,6 +221,7 @@ def location_summary(dateRange: Optional[str] = Query("", alias="dateRange"), st
             today = end_date
         else:
             today = datetime.now().date()
+            start_date = end_date - timedelta(days=6)
 
         conn = get_database_connection()
         cur = conn.cursor(dictionary=True)
@@ -234,7 +235,7 @@ def location_summary(dateRange: Optional[str] = Query("", alias="dateRange"), st
                    COUNT(DISTINCT e.employee_id) AS total_in_location
             FROM locations l
             LEFT JOIN employees e ON l.location_id = e.location_id AND e.employement_status = 'ACTIVE'
-            LEFT JOIN attendance_records ar ON e.employee_id = ar.employee_id AND ar.date_of_attendance = %s
+            LEFT JOIN attendance_records ar ON e.employee_id = ar.employee_id AND ar.date_of_attendance BETWEEN %s AND %s
             LEFT JOIN attendance_status_type ast ON ar.status_id = ast.status_id
             GROUP BY l.location_id, l.location_name
             ORDER BY l.location_name ASC
