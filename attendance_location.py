@@ -328,6 +328,14 @@ def _pdf_make(title: str, subtitle: str, filters: dict, lines: List[str]):
     buf.seek(0)
     return buf
 
+def _pdf_response(filename: str, buf: io.BytesIO):
+    """Return a PDF file as a streaming response."""
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
