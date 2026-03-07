@@ -54,40 +54,62 @@ def get_kpis(
         conn = get_database_connection()
         cur = conn.cursor(dictionary=True)
 
+        filter_parts = ["e.employement_status = 'ACTIVE'"]
+        filter_params = []
+        if department and department != "All":
+            filter_parts.append("d.department_name = %s")
+            filter_params.append(department)
+        if location and location != "All":
+            filter_parts.append("l.location_name = %s")
+            filter_params.append(location)
+        where_filter = " AND ".join(filter_parts)
+
         # Total employees
-        cur.execute("SELECT COUNT(*) AS total_employees FROM employees WHERE employement_status = 'ACTIVE'")
+        cur.execute(f"""
+            SELECT COUNT(DISTINCT e.employee_id) AS total_employees
+            FROM employees e
+            LEFT JOIN departments d ON d.department_id = e.department_id
+            LEFT JOIN locations l ON l.location_id = e.location_id
+            WHERE {where_filter}
+        """, tuple(filter_params))
         total_employees = cur.fetchone()["total_employees"]
 
         # Remote employees (use location_name instead of work_type)
-        cur.execute("""
-            SELECT COUNT(*) AS remote_workers
+        cur.execute(f"""
+            SELECT COUNT(DISTINCT e.employee_id) AS remote_workers
             FROM employees e
-            JOIN locations l ON e.location_id = l.location_id
-            WHERE l.location_name = 'Remote' AND e.employement_status = 'ACTIVE'
-        """)
+            LEFT JOIN departments d ON d.department_id = e.department_id
+            LEFT JOIN locations l ON l.location_id = e.location_id
+            WHERE {where_filter}
+              AND l.location_name = 'Remote'
+        """, tuple(filter_params))
         remote_workers = cur.fetchone()["remote_workers"]
 
         # Present today
-        today = datetime.now().date()
-        cur.execute("""
+        cur.execute(f"""
             SELECT COUNT(DISTINCT e.employee_id) AS present_today
             FROM employees e
+            LEFT JOIN departments d ON d.department_id = e.department_id
+            LEFT JOIN locations l ON l.location_id = e.location_id
             JOIN attendance_records ar ON e.employee_id = ar.employee_id
             JOIN attendance_status_type ast ON ar.status_id = ast.status_id
-            WHERE ar.date_of_attendance = %s AND ast.status_name IN ('Present', 'Late', 'Work From Home')
-            AND e.employement_status = 'ACTIVE'
-        """, (today,))
+                        WHERE ar.date_of_attendance BETWEEN %s AND %s
+              AND ast.status_name IN ('Present', 'Late', 'Work From Home')
+              AND {where_filter}
+                """, tuple([s, e] + filter_params))
         present_today = cur.fetchone()["present_today"] or 0
 
         # Absent today
-        cur.execute("""
+        cur.execute(f"""
             SELECT COUNT(DISTINCT e.employee_id) AS absent_today
             FROM employees e
-            LEFT JOIN attendance_records ar ON e.employee_id = ar.employee_id AND ar.date_of_attendance = %s
-            WHERE (ar.attendance_id IS NULL OR 
-                   ar.status_id IN (SELECT status_id FROM attendance_status_type WHERE status_name = 'Absent'))
-            AND e.employement_status = 'ACTIVE'
-        """, (today,))
+            LEFT JOIN departments d ON d.department_id = e.department_id
+            LEFT JOIN locations l ON l.location_id = e.location_id
+                        LEFT JOIN attendance_records ar ON e.employee_id = ar.employee_id AND ar.date_of_attendance BETWEEN %s AND %s
+            LEFT JOIN attendance_status_type ast ON ar.status_id = ast.status_id
+            WHERE {where_filter}
+                            AND ast.status_name = 'Absent'
+                """, tuple([s, e] + filter_params))
         absent_today = cur.fetchone()["absent_today"] or 0
 
         conn.close()
