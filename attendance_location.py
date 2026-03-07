@@ -244,11 +244,12 @@ def location_summary(dateRange: Optional[str] = Query("", alias="dateRange"), st
                    COUNT(DISTINCT e.employee_id) AS total_in_location
             FROM locations l
             LEFT JOIN employees e ON l.location_id = e.location_id AND e.employement_status = 'ACTIVE'
+            LEFT JOIN departments d ON d.department_id = e.department_id
             LEFT JOIN attendance_records ar ON e.employee_id = ar.employee_id AND ar.date_of_attendance BETWEEN %s AND %s
             LEFT JOIN attendance_status_type ast ON ar.status_id = ast.status_id
             GROUP BY l.location_id, l.location_name
             ORDER BY l.location_name ASC
-        """, (today,))
+        """, tuple(params))
         summary = cur.fetchall()
         conn.close()
 
@@ -262,6 +263,71 @@ def location_summary(dateRange: Optional[str] = Query("", alias="dateRange"), st
             })
 
         return result
+    
+# --- PDF Helper Functions ---
+
+def _pdf_make(title: str, subtitle: str, filters: dict, lines: List[str]):
+    """Create a PDF document and return the buffer."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#1f2937'),
+        spaceAfter=6,
+        bold=True,
+    )
+    subtitle_style = ParagraphStyle(
+        'CustomSubtitle',
+        parent=styles['Normal'],
+        fontSize=11,
+        textColor=colors.HexColor('#6b7280'),
+        spaceAfter=12,
+    )
+    
+    elements = []
+    elements.append(Paragraph(title, title_style))
+    elements.append(Paragraph(subtitle, subtitle_style))
+    
+    # Add filters as a table
+    filter_data = [["Filter", "Value"]]
+    for key, value in filters.items():
+        filter_data.append([key, str(value)])
+    
+    filter_table = Table(filter_data, colWidths=[2*inch, 4*inch])
+    filter_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f3f4f6')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1f2937')),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e5e7eb')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9fafb')]),
+    ]))
+    elements.append(filter_table)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Add content lines
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=10,
+        leading=14,
+    )
+    for line in lines:
+        if line == "":
+            elements.append(Spacer(1, 0.1*inch))
+        else:
+            elements.append(Paragraph(line, normal_style))
+    
+    doc.build(elements)
+    buf.seek(0)
+    return buf
+
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
