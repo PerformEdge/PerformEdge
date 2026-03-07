@@ -226,6 +226,15 @@ def location_summary(dateRange: Optional[str] = Query("", alias="dateRange"), st
         conn = get_database_connection()
         cur = conn.cursor(dictionary=True)
 
+        where_sql = " WHERE 1=1"
+        params = [start_date, end_date]
+        if department and department != "All":
+            where_sql += " AND d.department_name = %s"
+            params.append(department)
+        if location and location != "All":
+            where_sql += " AND l.location_name = %s"
+            params.append(location)
+
         cur.execute("""
             SELECT l.location_id,
                    l.location_name AS name,
