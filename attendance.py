@@ -214,3 +214,59 @@ def attendance_summary(
     finally:
         cur.close()
         conn.close()
+
+@router.get("/report")
+def attendance_report(
+    start: Optional[str] = Query(None),
+    end: Optional[str] = Query(None),
+    dateRange: Optional[str] = Query(None, alias="dateRange"),
+    department: Optional[str] = Query(None),
+    location: Optional[str] = Query(None),
+):
+    data = attendance_summary(
+        start=start,
+        end=end,
+        dateRange=dateRange,
+        department=department,
+        location=location,
+    )
+
+    start_date, end_date = resolve_date_range(date_range=dateRange, start=start, end=end, default_days=5)
+
+    lines = [
+        f"Date Range: {start_date.isoformat()} to {end_date.isoformat()}",
+        f"Department: {department or 'All'}",
+        f"Location: {location or 'All'}",
+        "",
+        f"Present: {data['kpis']['present']}",
+        f"Late: {data['kpis']['late']}",
+        f"On Leave: {data['kpis']['on_leave']}",
+        f"Overtime: {data['kpis']['overtime']}",
+        "",
+        "Late Comers by Department:",
+    ]
+
+    for row in data.get("late", []):
+        lines.append(f"- {row.get('department_name', 'Unknown')}: {row.get('late_count', 0)}")
+
+    lines.append("")
+    lines.append("No Pay (Absent) by Department:")
+    for row in data.get("no_pay", []):
+        lines.append(f"- {row.get('department_name', 'Unknown')}: {row.get('no_pay_count', 0)}")
+
+    lines.append("")
+    lines.append("Absentees by Day:")
+    for row in data.get("absentee", []):
+        day_val = row.get("day")
+        if hasattr(day_val, "isoformat"):
+            day_text = day_val.isoformat()
+        else:
+            day_text = str(day_val)
+        lines.append(f"- {day_text}: {row.get('absent_count', 0)}")
+
+    buf = _pdf_make(
+        title="Attendance Summary Report",
+        subtitle=f"Generated on {date.today().isoformat()}",
+        lines=lines,
+    )
+    return _pdf_response("attendance_summary_report.pdf", buf)
