@@ -126,7 +126,7 @@ def get_kpis(
 
 # --- 7-day attendance trend ---
 @router.get("/trend7days")
-def trend_7days(dateRange: Optional[str] = Query("", alias="dateRange"), start: Optional[str] = Query(None), end: Optional[str] = Query(None), location: Optional[str] = Query(None)):
+def trend_7days(dateRange: Optional[str] = Query("", alias="dateRange"), start: Optional[str] = Query(None), end: Optional[str] = Query(None), location: Optional[str] = Query(None), department: Optional[str] = Query(None)):
     try:
         # resolve date range if provided; default to past 7 days
         if start and end:
@@ -151,6 +151,15 @@ def trend_7days(dateRange: Optional[str] = Query("", alias="dateRange"), start: 
 
         conn = get_database_connection()
         cur = conn.cursor(dictionary=True)
+
+         where_sql = ""
+        params = [start_date, end_date]
+        if department and department != "All":
+            where_sql += " AND d.department_name = %s"
+            params.append(department)
+        if location and location != "All":
+            where_sql += " AND l.location_name = %s"
+            params.append(location)
 
         # Get data for the requested date range
         cur.execute("""
