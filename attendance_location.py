@@ -167,6 +167,7 @@ def trend_7days(dateRange: Optional[str] = Query("", alias="dateRange"), start: 
                    l.location_name,
                    COUNT(*) AS present_count
             FROM employees e
+            LEFT JOIN departments d ON d.department_id = e.department_id
             JOIN locations l ON e.location_id = l.location_id
             JOIN attendance_records ar ON e.employee_id = ar.employee_id
             JOIN attendance_status_type ast ON ar.status_id = ast.status_id
