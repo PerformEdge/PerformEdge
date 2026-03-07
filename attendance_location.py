@@ -25,7 +25,7 @@ def get_kpis(
     try:
         # resolve date range if provided; default to last 7 days
         def _resolve(date_range: Optional[str], default_days: int = 7):
-            if dateRange:
+            if date_range:
                 parts = re.split(r"\s+to\s+|\s+-\s+", dateRange)
                 if len(parts) >= 2:
                     try:
