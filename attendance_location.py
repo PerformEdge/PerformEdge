@@ -336,6 +336,104 @@ def _pdf_response(filename: str, buf: io.BytesIO):
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
+# --- Helper function to get location attendance data ---
+
+def get_location_attendance(date_range: str = "", location: str = "", company_id: Optional[str] = None):
+    """Get location attendance data based on filters."""
+    try:
+        conn = get_database_connection()
+        cur = conn.cursor(dictionary=True)
+
+        today = datetime.now().date()
+
+        # Build date range
+        if date_range == "7days":
+            start_date = today - timedelta(days=6)
+        elif date_range == "30days":
+            start_date = today - timedelta(days=29)
+        elif date_range == "90days":
+            start_date = today - timedelta(days=89)
+        else:
+            start_date = today - timedelta(days=365)
+
+        # Query to get location attendance summary
+        query = """
+            SELECT l.location_name AS location,
+                   COUNT(DISTINCT CASE WHEN ast.status_name IN ('Present', 'Late', 'Work From Home') THEN e.employee_id END) AS present,
+                   COUNT(DISTINCT CASE WHEN ast.status_name = 'Absent' THEN e.employee_id END) AS absent,
+                   COUNT(DISTINCT e.employee_id) AS total_employees,
+                   DATE(ar.date_of_attendance) AS attendance_date
+            FROM locations l
+            LEFT JOIN employees e ON l.location_id = e.location_id AND e.employement_status = 'ACTIVE'
+            LEFT JOIN attendance_records ar ON e.employee_id = ar.employee_id AND ar.date_of_attendance BETWEEN %s AND %s
+            LEFT JOIN attendance_status_type ast ON ar.status_id = ast.status_id
+        """
+        params = [start_date, today]
+        
+        if location and location != "All":
+            query += " WHERE l.location_name = %s"
+            params.append(location)
+        
+        query += " GROUP BY l.location_name, DATE(ar.date_of_attendance) ORDER BY l.location_name, DATE(ar.date_of_attendance) DESC"
+        
+        cur.execute(query, params)
+        rows = cur.fetchall()
+        conn.close()
+        
+        return rows
+    except Exception as e:
+        return []
+
+
+# --- Location Summary Statistics ---
+
+def location_summary_stats(date_range: str = "", location: str = ""):
+    """Get location summary statistics."""
+    try:
+        conn = get_database_connection()
+        cur = conn.cursor(dictionary=True)
+
+        today = datetime.now().date()
+
+        if date_range == "7days":
+            start_date = today - timedelta(days=6)
+        elif date_range == "30days":
+            start_date = today - timedelta(days=29)
+        elif date_range == "90days":
+            start_date = today - timedelta(days=89)
+        else:
+            start_date = today - timedelta(days=365)
+
+        # Get aggregate stats
+        query = """
+            SELECT COUNT(DISTINCT l.location_id) AS total_locations,
+                   COUNT(DISTINCT e.employee_id) AS total_employees,
+                   COUNT(DISTINCT CASE WHEN ast.status_name IN ('Present', 'Late', 'Work From Home') THEN e.employee_id END) AS total_present,
+                   COUNT(DISTINCT CASE WHEN ast.status_name = 'Absent' THEN e.employee_id END) AS total_absent
+            FROM locations l
+            LEFT JOIN employees e ON l.location_id = e.location_id AND e.employement_status = 'ACTIVE'
+            LEFT JOIN attendance_records ar ON e.employee_id = ar.employee_id AND ar.date_of_attendance BETWEEN %s AND %s
+            LEFT JOIN attendance_status_type ast ON ar.status_id = ast.status_id
+        """
+        params = [start_date, today]
+        
+        if location and location != "All":
+            query += " WHERE l.location_name = %s"
+            params.append(location)
+        
+        cur.execute(query, params)
+        row = cur.fetchone()
+        conn.close()
+        
+        return {
+            "totalLocations": row.get("total_locations", 0) if row else 0,
+            "totalEmployees": row.get("total_employees", 0) if row else 0,
+            "totalPresent": row.get("total_present", 0) if row else 0,
+            "totalAbsent": row.get("total_absent", 0) if row else 0,
+        }
+    except Exception as e:
+        return {}
+
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
