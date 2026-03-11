@@ -434,6 +434,363 @@ def location_summary_stats(date_range: str = "", location: str = ""):
     except Exception as e:
         return {}
 
+# --- Download Report Endpoints ---
+
+@router.get("/report/summary")
+def location_summary_report(
+    date_range: str = Query("", alias="dateRange"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None, alias="company_id"),
+    authorization: Optional[str] = Header(None),
+):
+    """Download a PDF report for Location Attendance Summary."""
+
+    attendance_data = get_location_attendance(
+        date_range=date_range,
+        location=location,
+        company_id=company_id,
+    )
+
+    stats = location_summary_stats(
+        date_range=date_range,
+        location=location,
+    )
+
+    filters = {
+        "Date Range": date_range or "All",
+        "Location": location or "All",
+    }
+
+    lines: List[str] = [
+        "Location Attendance Summary",
+        "",
+        "Summary Statistics",
+        f"Total Locations: {stats.get('totalLocations', 0)}",
+        f"Total Employees: {stats.get('totalEmployees', 0)}",
+        f"Total Present: {stats.get('totalPresent', 0)}",
+        f"Total Absent: {stats.get('totalAbsent', 0)}",
+        "",
+        "Attendance by Location",
+    ]
+
+    # Group data by location and add to report
+    location_dict = {}
+    for row in attendance_data:
+        loc = row.get("location", "Unknown")
+        if loc not in location_dict:
+            location_dict[loc] = {"present": 0, "absent": 0, "total": 0}
+        location_dict[loc]["present"] += row.get("present", 0)
+        location_dict[loc]["absent"] += row.get("absent", 0)
+        location_dict[loc]["total"] += row.get("total_employees", 0)
+
+    for loc, data in sorted(location_dict.items()):
+        present_pct = (data["present"] / data["total"] * 100) if data["total"] > 0 else 0
+        lines.append(
+            f"- {loc}: Present {data['present']} | Absent {data['absent']} | Total {data['total']} | {present_pct:.1f}%"
+        )
+
+    buf = _pdf_make(
+        title="Location Attendance Summary",
+        subtitle="Attendance Management — Download Report",
+        filters=filters,
+        lines=lines,
+    )
+    return _pdf_response("location_attendance_summary_report.pdf", buf)
+
+
+@router.get("/report/branchwise")
+def location_branchwise_report(
+    date_range: str = Query("", alias="dateRange"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None, alias="company_id"),
+    authorization: Optional[str] = Header(None),
+):
+    """Download a PDF report for Branch-wise Attendance (Present and Absent Cards)."""
+
+    attendance_data = get_location_attendance(
+        date_range=date_range,
+        location=location,
+        company_id=company_id,
+    )
+
+    filters = {
+        "Date Range": date_range or "All",
+        "Location": location or "All",
+    }
+
+    lines: List[str] = [
+        "Branch-wise Attendance Report",
+        "",
+        "Present and Absent Card Details",
+        "",
+    ]
+
+    # Group by location
+    location_dict = {}
+    for row in attendance_data:
+        loc = row.get("location", "Unknown")
+        if loc not in location_dict:
+            location_dict[loc] = {"records": []}
+        location_dict[loc]["records"].append(row)
+
+    # Add location details
+    for loc, data in sorted(location_dict.items()):
+        lines.append(f"Branch: {loc}")
+        lines.append("")
+        
+        total_present = sum(r.get("present", 0) for r in data["records"])
+        total_absent = sum(r.get("absent", 0) for r in data["records"])
+        total_employees = data["records"][0].get("total_employees", 0) if data["records"] else 0
+        
+        lines.append(f"  Present Count: {total_present}")
+        lines.append(f"  Absent Count: {total_absent}")
+        lines.append(f"  Total Employees: {total_employees}")
+        
+        if total_employees > 0:
+            present_pct = (total_present / total_employees) * 100
+            absent_pct = (total_absent / total_employees) * 100
+            lines.append(f"  Attendance Rate: {present_pct:.2f}%")
+            lines.append(f"  Absence Rate: {absent_pct:.2f}%")
+        
+        lines.append("")
+
+    buf = _pdf_make(
+        title="Branch-wise Attendance Report",
+        subtitle="Attendance Management — Present & Absent Cards",
+        filters=filters,
+        lines=lines,
+    )
+    return _pdf_response("location_branchwise_attendance_report.pdf", buf)
+
+
+@router.get("/report/trend")
+def location_trend_report(
+    date_range: str = Query("", alias="dateRange"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None, alias="company_id"),
+    authorization: Optional[str] = Header(None),
+):
+    """Download a PDF report for Location Attendance Trend."""
+
+    attendance_data = get_location_attendance(
+        date_range=date_range,
+        location=location,
+        company_id=company_id,
+    )
+
+    filters = {
+        "Date Range": date_range or "All",
+        "Location": location or "All",
+    }
+
+    lines: List[str] = [
+        "Location Attendance Trend Report",
+        "",
+        "Daily Attendance Trend",
+        "",
+    ]
+
+    # Group by date for trend data
+    date_dict = {}
+    for row in attendance_data:
+        date_key = row.get("attendance_date")
+        if date_key:
+            if date_key not in date_dict:
+                date_dict[date_key] = {"present": 0, "absent": 0}
+            date_dict[date_key]["present"] += row.get("present", 0)
+            date_dict[date_key]["absent"] += row.get("absent", 0)
+
+    # Add trend data sorted by date
+    for date_key in sorted(date_dict.keys(), reverse=True)[:30]:  # Last 30 days
+        data = date_dict[date_key]
+        total = data["present"] + data["absent"]
+        if total > 0:
+            present_pct = (data["present"] / total) * 100
+        else:
+            present_pct = 0
+        lines.append(
+            f"- {date_key}: Present {data['present']} | Absent {data['absent']} | {present_pct:.1f}%"
+        )
+
+    buf = _pdf_make(
+        title="Location Attendance Trend",
+        subtitle="Attendance Management — Download Report",
+        filters=filters,
+        lines=lines,
+    )
+    return _pdf_response("location_attendance_trend_report.pdf", buf)
+
+
+# -----------------------------------------------------------------------------
+# Download Report endpoints (Performance / Training / Appraisals / Overview)
+# -----------------------------------------------------------------------------
+
+
+try:
+    # Prefer the real implementations from the performance module when available.
+    from performance import (
+        performance_ranking,
+        training_needs,
+        appraisals_completion,
+        appraisal_completion_status,
+    )
+except Exception:
+    # Fallback stubs kept for environments where the performance module
+    # cannot be imported (avoids circular import errors during startup).
+    def performance_ranking(
+        date_range: str = "",
+        department: str = "",
+        location: str = "",
+        company_id: Optional[str] = None,
+        authorization: Optional[str] = None,
+    ):
+        """Fallback stub for performance ranking data."""
+        return {"stats": {}, "chart": [], "employees": []}
+
+
+    def training_needs(
+        date_range: str = "",
+        department: str = "",
+        location: str = "",
+        company_id: Optional[str] = None,
+        authorization: Optional[str] = None,
+    ):
+        """Fallback stub for training needs data."""
+        return {"stats": {}, "bars": [], "table": []}
+
+
+    def appraisals_completion(
+        date_range: str = "",
+        department: str = "",
+        location: str = "",
+        company_id: Optional[str] = None,
+        authorization: Optional[str] = None,
+    ):
+        """Fallback stub for appraisals completion data."""
+        return {"stats": {}, "chart": [], "rows": []}
+
+
+    def appraisal_completion_status(
+        date_range: str = "",
+        department: str = "",
+        location: str = "",
+        company_id: Optional[str] = None,
+        authorization: Optional[str] = None,
+    ):
+        """Alias stub used by overview generator if referenced elsewhere."""
+        return appraisals_completion(date_range, department, location, company_id, authorization)
+
+
+@router.get("/ranking/report")
+def ranking_report(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None, alias="company_id"),
+    authorization: Optional[str] = Header(None),
+):
+    """Download a PDF report for Performance Ranking Distribution."""
+
+    data = performance_ranking(
+        date_range=date_range,
+        department=department,
+        location=location,
+        company_id=company_id,
+        authorization=authorization,
+    )
+
+    stats = (data or {}).get("stats", {})
+    chart = (data or {}).get("chart", [])
+    employees = (data or {}).get("employees", [])
+
+    filters = {
+        "Date Range": date_range or "All",
+        "Department": department or "All",
+        "Location": location or "All",
+    }
+
+    lines: List[str] = [
+        "Summary",
+        f"Average Score: {stats.get('averageScore', 0)}%",
+        f"Excellence Rate: {stats.get('excellenceRate', 0)}%",
+        f"Needs Improvement: {stats.get('needsImprovement', 0)}",
+        f"Top Performers: {stats.get('topPerformers', 0)}",
+        "",
+        "Ranking Distribution",
+    ]
+
+    for it in chart:
+        lines.append(f"- {it.get('name')}: {it.get('value')}%")
+
+    lines.extend(["", "Employee Performance Breakdown (first 50)"])
+    for r in employees[:50]:
+        lines.append(
+            f"- {r.get('name')} | {r.get('department')} | {r.get('percentage')}% | {r.get('rating')}"
+        )
+
+    buf = _pdf_make(
+        title="Performance Ranking Distribution",
+        subtitle="PerformEdge — Download Report",
+        filters=filters,
+        lines=lines,
+    )
+    return _pdf_response("performance_ranking_report.pdf", buf)
+
+
+@router.get("/training/report")
+def training_report(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    company_id: Optional[str] = Query(None, alias="company_id"),
+    authorization: Optional[str] = Header(None),
+):
+    """Download a PDF report for Training Needs Distribution."""
+
+    data = training_needs(
+        date_range=date_range,
+        department=department,
+        location=location,
+        company_id=company_id,
+        authorization=authorization,
+    )
+
+    stats = (data or {}).get("stats", {})
+    bars = (data or {}).get("bars", [])
+    rows = (data or {}).get("table", [])
+
+    filters = {
+        "Date Range": date_range or "All",
+        "Department": department or "All",
+        "Location": location or "All",
+    }
+
+    lines: List[str] = [
+        "Summary",
+        f"Total Employees: {stats.get('totalEmployees', 0)}",
+        f"Employees Need Training: {stats.get('employeesNeedTraining', 0)}",
+        f"Top Training Category: {stats.get('topTrainingCategory', '-')}",
+        f"Average Training Completion: {stats.get('avgTrainingCompletion', 0)}%",
+        "",
+        "Training Category Distribution",
+    ]
+
+    for b in bars:
+        lines.append(f"- {b.get('name')}: {b.get('value')}%")
+
+    lines.extend(["", "Employee Breakdown (first 50)"])
+    for r in rows[:50]:
+        lines.append(
+            f"- {r.get('name')} | {r.get('department')} | Tech {r.get('technical', 0)}% | Soft {r.get('softSkills', 0)}% | Leadership {r.get('leadership', 0)}% | Compliance {r.get('compliance', 0)}% | Total {r.get('total', 0)}%"
+        )
+
+    buf = _pdf_make(
+        title="Training Needs Distribution",
+        subtitle="PerformEdge — Download Report",
+        filters=filters,
+        lines=lines,
+    )
+    return _pdf_response("training_needs_report.pdf", buf)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
