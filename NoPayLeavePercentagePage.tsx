@@ -114,3 +114,28 @@ export default function NoPayLeavePercentagePage() {
       setErrorMessage(err instanceof Error ? err.message : "Failed to fetch KPI summary.");
     }
   }
+
+ /* ================= FETCH DONUT ================= */
+  async function fetchByDepartment() {
+    try {
+      const res = await fetch(`${API_BASE}/no-pay/by-department?start=${start}&end=${end}&department=${encodeURIComponent(department)}&location=${encodeURIComponent(locationFilter)}`);
+      const raw = await res.json().catch(() => ([]));
+      if (!res.ok) throw new Error((raw as any)?.detail || "Failed to fetch department data.");
+      const data = Array.isArray(raw) ? raw : [];
+
+      setDonutData({
+        labels: data.map((d: any) => d.department_name),
+        datasets: [
+          {
+            data: data.map((d: any) => d.no_pay_percentage),
+            backgroundColor: chartPalettes.donut.slice(0, data.length),
+            borderWidth: 0,
+          },
+        ],
+      });
+    } catch (err) {
+      console.error("Failed to fetch department data:", err);
+      setErrorMessage(err instanceof Error ? err.message : "Failed to fetch department data.");
+      setDonutData({ labels: [], datasets: [] });
+    }
+  }
