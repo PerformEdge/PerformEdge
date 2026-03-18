@@ -202,7 +202,7 @@ export default function AttendanceTrendsPage() {
       },
     ],
   };
-  
+
   const AXIS_COLOR = getAxisColor(dark);
   const GRID_COLOR = getGridColor(dark);
 
@@ -398,7 +398,6 @@ export default function AttendanceTrendsPage() {
     </div>
   );
 }
-
 
 // --- Components ---
 function KpiCard({ 
