@@ -63,3 +63,142 @@ const chartColors = {
 
 const getAxisColor = (isDark: boolean) => isDark ? "#F8FAFC" : "#475569";
 const getGridColor = (isDark: boolean) => isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)";
+
+export default function AttendanceTrendsPage() {
+  const API_BASE = "http://localhost:8000";
+  const [kpis, setKpis] = useState({ employees: 0, absenteeRate: 0, highestDay: "", topDept: "" });
+  const [last5Days, setLast5Days] = useState<{ day: string; absent: number }[]>([]);
+  const [avgByDept, setAvgByDept] = useState<{ dept: string; rate: number }[]>([]);
+  const [dailyByDept, setDailyByDept] = useState<any>({ labels: [], datasets: [] });
+  const [deptBreakdown, setDeptBreakdown] = useState<any[]>([]);
+  const [errorMessage, setErrorMessage] = useState("");
+  const dark = isDarkMode();
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [department, setDepartment] = useState("All");
+  const [locationFilter, setLocationFilter] = useState("All");
+
+  useEffect(() => {
+    const initializeDateRange = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/attendance/latest-date`);
+        const data = await res.json();
+        if (data?.start && data?.end) {
+          setStart(data.start);
+          setEnd(data.end);
+          return;
+        }
+      } catch {
+      }
+
+      const today = new Date();
+      const s = new Date(today);
+      s.setDate(s.getDate() - 6);
+      setStart(s.toISOString().split("T")[0]);
+      setEnd(today.toISOString().split("T")[0]);
+    };
+    initializeDateRange();
+  }, []);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!start || !end) return;
+      if (start > end) {
+        setErrorMessage("Start date must be before or equal to end date.");
+        setLast5Days([]);
+        setAvgByDept([]);
+        setDailyByDept({ labels: [], datasets: [] });
+        setDeptBreakdown([]);
+        setKpis({ employees: 0, absenteeRate: 0, highestDay: "", topDept: "" });
+        return;
+      }
+      try {
+        setErrorMessage("");
+        const qp = (path: string, includeDept = true, includeLoc = true) => {
+          const params = new URLSearchParams();
+          params.set('start', start);
+          params.set('end', end);
+          if (includeDept && department && department !== 'All') params.set('department', department);
+          if (includeLoc && locationFilter && locationFilter !== 'All') params.set('location', locationFilter);
+          return `${API_BASE}${path}?${params.toString()}`;
+        };
+
+        const [last5Res, avgRes, dailyRes, breakdownRes] = await Promise.all([
+          fetch(qp('/attendance-trends/last-5-days', false, false)),
+          fetch(qp('/attendance-trends/avg-by-department')),
+          fetch(qp('/attendance-trends/daily-by-department')),
+          fetch(qp('/attendance-trends/dept-breakdown')),
+        ]);
+
+        const [resLast5Raw, resAvgRaw, resDailyRaw, resBreakdownRaw] = await Promise.all([
+          last5Res.json().catch(() => []),
+          avgRes.json().catch(() => []),
+          dailyRes.json().catch(() => ({ labels: [], datasets: [] })),
+          breakdownRes.json().catch(() => []),
+        ]);
+
+        if (!last5Res.ok || !avgRes.ok || !dailyRes.ok || !breakdownRes.ok) {
+          const detail = (resLast5Raw as any)?.detail || (resAvgRaw as any)?.detail || (resDailyRaw as any)?.detail || (resBreakdownRaw as any)?.detail;
+          throw new Error(detail || "Failed to load attendance trends data.");
+        }
+
+        const resLast5 = Array.isArray(resLast5Raw) ? resLast5Raw : [];
+        const resAvg = Array.isArray(resAvgRaw) ? resAvgRaw : [];
+        const resDaily = (resDailyRaw && typeof resDailyRaw === "object") ? resDailyRaw : { labels: [], datasets: [] };
+        const resBreakdown = Array.isArray(resBreakdownRaw) ? resBreakdownRaw : [];
+
+        setLast5Days(resLast5 || []);
+        setAvgByDept(resAvg || []);
+        setDailyByDept(resDaily || { labels: [], datasets: [] });
+        setDeptBreakdown(resBreakdown || []);
+
+        // Calculate KPI values
+        const totalEmps = resBreakdown.length ? resBreakdown.reduce((a, c) => a + (c.staff || 0), 0) : 0;
+        const avgRate = resAvg.length ? (resAvg.reduce((a, c) => a + (c.rate || 0), 0) / resAvg.length).toFixed(1) : "0";
+        const highDay = resLast5.length ? resLast5.reduce((a, c) => (c.absent > a.absent ? c : a), resLast5[0]) : null;
+        const topD = resAvg.length ? resAvg.reduce((a, c) => (c.rate > a.rate ? c : a), resAvg[0]) : null;
+
+        setKpis({
+          employees: totalEmps,
+          absenteeRate: parseFloat(avgRate),
+          highestDay: highDay ? dayName(highDay.day) : "",
+          topDept: topD?.dept || "",
+        });
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setErrorMessage(err instanceof Error ? err.message : "Failed to load attendance trends data.");
+        setLast5Days([]);
+        setAvgByDept([]);
+        setDailyByDept({ labels: [], datasets: [] });
+        setDeptBreakdown([]);
+        setKpis({ employees: 0, absenteeRate: 0, highestDay: "", topDept: "" });
+      }
+    };
+    fetchData();
+  }, [start, end, department, locationFilter]);
+
+  const barData = {
+    labels: last5Days.map((d) => d.day),
+    datasets: [
+      {
+        label: "Absentee %",
+        data: last5Days.map((d) => d.absent),
+        backgroundColor: chartColors.trendBars.map((c) => dark ? c.dark : c.light),
+        borderRadius: 12,
+        maxBarThickness: 56,
+      },
+    ],
+  };
+
+  const avgData = {
+    labels: avgByDept.map((d) => d.dept),
+    datasets: [
+      {
+        label: "Avg Absentee %",
+        data: avgByDept.map((d) => d.rate),
+        backgroundColor: chartColors.departmentAvg.slice(0, avgByDept.length).map((c) => dark ? c.dark : c.light),
+        borderRadius: 14,
+        maxBarThickness: 84,
+      },
+    ],
+  };
