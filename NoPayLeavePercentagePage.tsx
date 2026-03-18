@@ -139,3 +139,75 @@ export default function NoPayLeavePercentagePage() {
       setDonutData({ labels: [], datasets: [] });
     }
   }
+
+  /* ================= FETCH BAR ================= */
+  async function fetchDistribution() {
+    try {
+      const res = await fetch(`${API_BASE}/no-pay/distribution?start=${start}&end=${end}&department=${encodeURIComponent(department)}&location=${encodeURIComponent(locationFilter)}`);
+      const raw = await res.json().catch(() => ([]));
+      if (!res.ok) throw new Error((raw as any)?.detail || "Failed to fetch distribution data.");
+      const data = Array.isArray(raw) ? raw : [];
+
+      setBarData({
+        labels: data.map((d: any) => d.department_name),
+        datasets: [
+          {
+            data: data.map((d: any) => d.days),
+            backgroundColor: chartPalettes.bar.slice(0, data.length),
+            borderRadius: 16,
+            barThickness: 56,
+            maxBarThickness: 64,
+            categoryPercentage: 0.6,
+            barPercentage: 0.85,
+          },
+        ],
+      });
+    } catch (err) {
+      console.error("Failed to fetch distribution data:", err);
+      setErrorMessage(err instanceof Error ? err.message : "Failed to fetch distribution data.");
+      setBarData({ labels: [], datasets: [] });
+    }
+  }
+
+  /* ================= FETCH TABLE ================= */
+  async function fetchDetails() {
+    try {
+      const res = await fetch(`${API_BASE}/no-pay/details?start=${start}&end=${end}&department=${encodeURIComponent(department)}&location=${encodeURIComponent(locationFilter)}`);
+      const raw = await res.json().catch(() => ([]));
+      if (!res.ok) throw new Error((raw as any)?.detail || "Failed to fetch table data.");
+      const data = Array.isArray(raw) ? raw : [];
+      setTableData(data || []);
+    } catch (err) {
+      console.error("Failed to fetch table data:", err);
+      setErrorMessage(err instanceof Error ? err.message : "Failed to fetch table data.");
+      setTableData([]);
+    }
+  }
+
+  /* ================= DOWNLOAD REPORT ================= */
+  async function downloadReport() {
+    try {
+      const url = `${API_BASE}/no-pay/report?start=${start}&end=${end}&department=${encodeURIComponent(department)}&location=${encodeURIComponent(locationFilter)}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.error("Failed to fetch report", res.statusText);
+        return;
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      let filename = "no_pay_report.pdf";
+      const match = disposition.match(/filename=([^;]+)/);
+      if (match && match[1]) filename = match[1].replace(/['"]/g, "");
+
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("Failed to download report:", err);
+    }
+  }
