@@ -32,3 +32,85 @@ const chartPalettes = {
 };
 
 import FilterControls from "@/components/FilterControls";
+
+/* ================= PAGE ================= */
+export default function NoPayLeavePercentagePage() {
+  const [kpis, setKpis] = useState([
+    { label: "Total No-Pay Days", value: "-", scheme: kpiColorSchemes.total },
+    { label: "Affected Employees", value: "-", scheme: kpiColorSchemes.affected },
+    { label: "No-Pay Percentage", value: "-", scheme: kpiColorSchemes.percentage },
+    { label: "Monthly Trend", value: "-", scheme: kpiColorSchemes.trend },
+  ]);
+
+  const [donutData, setDonutData] = useState<any>({ labels: [], datasets: [] });
+  const [barData, setBarData] = useState<any>({ labels: [], datasets: [] });
+  const [tableData, setTableData] = useState<any[]>([]);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [department, setDepartment] = useState("All");
+  const [locationFilter, setLocationFilter] = useState("All");
+
+  useEffect(() => {
+    const initializeDateRange = async () => {
+      try {
+        const res = await fetch("http://localhost:8000/attendance/latest-date?default_days=14");
+        const data = await res.json();
+        if (data?.start && data?.end) {
+          setStart(data.start);
+          setEnd(data.end);
+          return;
+        }
+      } catch {
+      }
+
+      const d = new Date();
+      const s = new Date(d);
+      s.setDate(s.getDate() - 13);
+      setStart(s.toISOString().split("T")[0]);
+      setEnd(d.toISOString().split("T")[0]);
+    };
+    initializeDateRange();
+  }, []);
+
+  useEffect(() => {
+    if (!start || !end) return;
+    if (start > end) {
+      setErrorMessage("Start date must be before or equal to end date.");
+      setKpis([
+        { label: "Total No-Pay Days", value: "-", scheme: kpiColorSchemes.total },
+        { label: "Affected Employees", value: "-", scheme: kpiColorSchemes.affected },
+        { label: "No-Pay Percentage", value: "-", scheme: kpiColorSchemes.percentage },
+        { label: "Monthly Trend", value: "-", scheme: kpiColorSchemes.trend },
+      ]);
+      setDonutData({ labels: [], datasets: [] });
+      setBarData({ labels: [], datasets: [] });
+      setTableData([]);
+      return;
+    }
+    setErrorMessage("");
+    fetchSummary();
+    fetchByDepartment();
+    fetchDistribution();
+    fetchDetails();
+  }, [start, end, department, locationFilter]);
+
+  /* ================= FETCH KPI CARDS ================= */
+  async function fetchSummary() {
+    try {
+      const res = await fetch(`${API_BASE}/no-pay/summary?start=${start}&end=${end}&department=${encodeURIComponent(department)}&location=${encodeURIComponent(locationFilter)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.detail || "Failed to fetch KPI summary.");
+
+      setKpis([
+        { label: "Total No-Pay Days", value: data.total_days, scheme: kpiColorSchemes.total },
+        { label: "Affected Employees", value: data.employees, scheme: kpiColorSchemes.affected },
+        { label: "No-Pay Percentage", value: `${data.no_pay_percentage}%`, scheme: kpiColorSchemes.percentage },
+        { label: "Monthly Trend", value: data.monthly_trend, scheme: kpiColorSchemes.trend },
+      ]);
+    } catch (err) {
+      console.error("Failed to fetch KPI summary:", err);
+      setErrorMessage(err instanceof Error ? err.message : "Failed to fetch KPI summary.");
+    }
+  }
