@@ -398,3 +398,55 @@ export default function AttendanceTrendsPage() {
     </div>
   );
 }
+
+
+// --- Components ---
+function KpiCard({ 
+  label, 
+  value, 
+  colorScheme,
+  isDark
+}: { 
+  label: string; 
+  value: string;
+  colorScheme: { light: { bg: string; text: string; label: string }; dark: { bg: string; text: string; label: string } };
+  isDark: boolean;
+}) {
+  const colors = isDark ? colorScheme.dark : colorScheme.light;
+  return (
+    <div 
+      className="rounded-2xl p-5 border border-border shadow-sm transition-all hover:shadow-md"
+      style={{ backgroundColor: colors.bg }}
+    >
+      <div className="text-xs font-semibold" style={{ color: colors.label }}>{label}</div>
+      <div className="mt-2 text-2xl font-extrabold tracking-tight" style={{ color: colors.text }}>{value}</div>
+    </div>
+  );
+}
+
+function FilterPill({ label }: { label: string }) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex items-center justify-between rounded-full border border-border px-4 py-1 text-xs font-medium hover:bg-muted/50"
+      )}
+    >
+      {label}
+      <ChevronDown className="ml-2 h-3 w-3" />
+    </button>
+  );
+}
+
+function dayName(short: string) {
+  const map: Record<string, string> = {
+    Mon: "Monday",
+    Tue: "Tuesday",
+    Wed: "Wednesday",
+    Thu: "Thursday",
+    Fri: "Friday",
+    Sat: "Saturday",
+    Sun: "Sunday",
+  };
+  return map[short] || short;
+}
