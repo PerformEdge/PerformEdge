@@ -202,3 +202,199 @@ export default function AttendanceTrendsPage() {
       },
     ],
   };
+  
+  const AXIS_COLOR = getAxisColor(dark);
+  const GRID_COLOR = getGridColor(dark);
+
+  const barOptions: ChartOptions<"bar"> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { enabled: true } },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: AXIS_COLOR, font: { weight: "bold" } } },
+      y: { beginAtZero: true, ticks: { color: AXIS_COLOR, callback: (v) => `${v}%` }, grid: { color: GRID_COLOR } },
+    },
+  };
+
+  const lineOptions: ChartOptions<"line"> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { enabled: true } },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: AXIS_COLOR } },
+      y: { beginAtZero: true, ticks: { color: AXIS_COLOR }, grid: { color: GRID_COLOR } },
+    },
+  };
+
+  const downloadReport = async () => {
+    try {
+      const params = new URLSearchParams();
+      params.set('start', start);
+      params.set('end', end);
+      if (department && department !== 'All') params.set('department', department);
+      if (locationFilter && locationFilter !== 'All') params.set('location', locationFilter);
+      const url = `${API_BASE}/attendance-trends/report?${params.toString()}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.error("Failed to download report", res.statusText);
+        return;
+      }
+      const blob = await res.blob();
+      const href = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = "attendance_trends_report.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(href);
+    } catch (err) {
+      console.error("Error downloading report:", err);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {errorMessage ? (
+        <Card className="border-red-200 bg-red-50/40 dark:border-red-900/40 dark:bg-red-900/10">
+          <CardContent className="py-3 text-sm text-red-700 dark:text-red-300">{errorMessage}</CardContent>
+        </Card>
+      ) : null}
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-2xl font-extrabold tracking-tight">Attendance Trends</div>
+        <div className="flex flex-wrap gap-3 items-center">
+          <FilterControls
+            start={start}
+            end={end}
+            setStart={setStart}
+            setEnd={setEnd}
+            department={department}
+            setDepartment={setDepartment}
+            locationFilter={locationFilter}
+            setLocationFilter={setLocationFilter}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <KpiCard
+          label="Total Employees"
+          value={kpis.employees.toString()}
+          colorScheme={kpiColorScheme.employees}
+          isDark={dark}
+        />
+        <KpiCard
+          label="Avg Absentee Rate"
+          value={`${kpis.absenteeRate.toFixed(1)}%`}
+          colorScheme={kpiColorScheme.absentee}
+          isDark={dark}
+        />
+        <KpiCard
+          label="Highest Absentee Day"
+          value={kpis.highestDay}
+          colorScheme={kpiColorScheme.highest}
+          isDark={dark}
+        />
+        <KpiCard
+          label="Top Concern Dept"
+          value={kpis.topDept}
+          colorScheme={kpiColorScheme.concern}
+          isDark={dark}
+        />
+      </div>
+
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold">Department-wise Absentee Trend (Last 5 Days)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-6 lg:grid-cols-[1fr_240px]">
+            <div className="h-[260px]">
+              <Bar data={barData} options={barOptions} />
+            </div>
+            <div className="rounded-2xl border border-border bg-background p-4">
+              <div className="mt-2 space-y-3">
+                {last5Days.map((d, idx) => (
+                  <div key={d.day} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: (barData.datasets[0].backgroundColor as string[])[idx] }} />
+                      <span className="font-medium">{dayName(d.day)}</span>
+                    </div>
+                    <span className="text-muted-foreground">{d.absent}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold">Daily Absentee Trends by Department</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[260px]">
+            <Line data={dailyByDept} options={lineOptions} />
+          </div>
+            <div className="flex justify-end pt-4">
+            <Button variant="outline" className="rounded-xl" onClick={downloadReport}>
+              <FileText className="h-4 w-4 mr-2" />
+              Download Report
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold">Average Absentee Rate by Dept</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[210px]">
+            <Bar data={avgData} options={barOptions} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold">Detailed Department Breakdown</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-2xl border border-border">
+            <table className="min-w-[760px] w-full text-left text-sm">
+              <thead className="bg-muted/40 text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Department</th>
+                  <th className="px-4 py-3 font-semibold">Total Staff</th>
+                  <th className="px-4 py-3 font-semibold">Mon</th>
+                  <th className="px-4 py-3 font-semibold">Tue</th>
+                  <th className="px-4 py-3 font-semibold">Wed</th>
+                  <th className="px-4 py-3 font-semibold">Thu</th>
+                  <th className="px-4 py-3 font-semibold">Fri</th>
+                  <th className="px-4 py-3 font-semibold">5-Day Avg</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deptBreakdown.map((r) => (
+                  <tr key={r.dept} className="border-t border-border">
+                    <td className="px-4 py-3 font-medium">{r.dept}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{r.staff || 0}</td>
+                    <td className="px-4 py-3">{r.mon || 0}</td>
+                    <td className="px-4 py-3">{r.tue || 0}</td>
+                    <td className="px-4 py-3">{r.wed || 0}</td>
+                    <td className="px-4 py-3">{r.thu || 0}</td>
+                    <td className="px-4 py-3">{r.fri || 0}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{r.avg || 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
