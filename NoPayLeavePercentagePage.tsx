@@ -211,3 +211,155 @@ export default function NoPayLeavePercentagePage() {
       console.error("Failed to download report:", err);
     }
   }
+
+  /* ================= CHART OPTIONS ================= */
+  const dark = isDarkMode();
+  const AXIS_COLOR = getAxisColor(dark);
+  const GRID_COLOR = getGridColor(dark);
+
+  const donutOptions: ChartOptions<"doughnut"> = {
+    responsive: true,
+    cutout: "65%",
+    animation: { animateRotate: true, duration: 900 },
+    plugins: { legend: { display: false } },
+  };
+
+  const barOptions: ChartOptions<"bar"> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 900, easing: "easeOutQuart" },
+    plugins: { legend: { display: false }, tooltip: { enabled: true } },
+    layout: { padding: { left: 24, right: 24, top: 10, bottom: 12 } },
+    scales: {
+      x: { offset: true, grid: { display: false }, ticks: { color: AXIS_COLOR, font: { size: 13, weight: 600 } } },
+      y: { beginAtZero: true, ticks: { stepSize: 4, color: AXIS_COLOR, font: { size: 12 } }, grid: { color: GRID_COLOR } },
+    },
+  };
+
+  return (
+    <div className="space-y-6">
+      {errorMessage ? (
+        <Card className="border-red-200 bg-red-50/40 dark:border-red-900/40 dark:bg-red-900/10">
+          <CardContent className="py-3 text-sm text-red-700 dark:text-red-300">{errorMessage}</CardContent>
+        </Card>
+      ) : null}
+
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-extrabold">No-Pay Leave Percentage</h2>
+        <div className="flex gap-3 items-center">
+          <FilterControls
+            start={start}
+            end={end}
+            setStart={setStart}
+            setEnd={setEnd}
+            department={department}
+            setDepartment={setDepartment}
+            locationFilter={locationFilter}
+            setLocationFilter={setLocationFilter}
+          />
+        </div>
+      </div>
+
+      {/* KPI CARDS */}
+      <div className="grid gap-4 md:grid-cols-4">
+        {kpis.map((k) => (
+          <KpiCard key={k.label} label={k.label} value={k.value.toString()} scheme={k.scheme} isDark={dark} />
+        ))}
+      </div>
+
+      {/* DONUT */}
+      <Card>
+        <CardHeader>
+          <CardTitle>No-Pay Percentage (Department Wise)</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col md:flex-row items-center justify-center gap-8">
+          <div className="h-[260px] w-[260px] flex items-center justify-center">
+            <Doughnut data={donutData} options={donutOptions} />
+          </div>
+          <div className="space-y-2 text-sm min-w-[160px]">
+            {donutData.labels.map((l, i) => (
+              <div key={l} className="flex items-center gap-2">
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ background: donutData.datasets[0].backgroundColor[i] as string }}
+                />
+                <span className="flex-1">{l}</span>
+                <span className="text-muted-foreground">{donutData.datasets[0].data[i]}%</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+        <div className="flex justify-end p-4">
+          <Button variant="outline" size="sm" onClick={downloadReport}>
+            <Download className="h-4 w-4 mr-2" />
+            Download Report
+          </Button>
+        </div>
+      </Card>
+
+      {/* BAR */}
+      <Card>
+        <CardHeader>
+          <CardTitle>No Pay Date Distribution</CardTitle>
+        </CardHeader>
+        <CardContent className="flex justify-center">
+          <div className="h-[280px] w-full max-w-[520px]">
+            <Bar data={barData} options={barOptions} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* TABLE */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Detailed Department Breakdown</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <tr>
+                <th className="px-4 py-3 text-left">Department</th>
+                <th>Employee Name</th>
+                <th>No-Pay Days</th>
+                <th>No-Pay Hours</th>
+                <th>Occurrences</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tableData.map((r: any) => (
+                <tr key={r.employee_name} className="border-t">
+                  <td className="px-4 py-3">{r.department_name}</td>
+                  <td className="px-4 py-3">{r.employee_name}</td>
+                  <td className="px-4 py-3">{r.no_pay_days}</td>
+                  <td className="px-4 py-3">{r.no_pay_hours}</td>
+                  <td className="px-4 py-3">{r.occurrences}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/* ================= SMALL COMPONENTS ================= */
+function Filter({ label }: { label: string }) {
+  return (
+    <button className="flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold">
+      {label}
+      <ChevronDown className="h-4 w-4" />
+    </button>
+  );
+}
+
+function KpiCard({ label, value, scheme, isDark }: { label: string; value: string; scheme: any; isDark: boolean }) {
+  const colors = isDark ? scheme.dark : scheme.light;
+  return (
+    <div className="rounded-2xl p-5 border border-border shadow-sm transition-all hover:shadow-md" style={{ backgroundColor: colors.bg }}>
+      <div className="text-xs font-semibold" style={{ color: colors.label }}>{label}</div>
+      <div className="mt-2 text-2xl font-extrabold" style={{ color: colors.text }}>{value}</div>
+    </div>
+  );
+}
