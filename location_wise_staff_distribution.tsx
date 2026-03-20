@@ -7,11 +7,11 @@ import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-/* ---------------- API BASE URL ---------------- */
+/*  API BASE URL  */
 const API_BASE = "http://localhost:8000";
 
 
-/* ---------------- TYPES ---------------- */
+/*  TYPES  */
 
 
 
@@ -37,11 +37,11 @@ interface ApiResponse {
   employees: EmployeeItem[];
 }
 
-/* ---------------- API ---------------- */
+/*  API  */
 
 const API_URL = `${API_BASE}/eim/location-wise-staff`;
 
-/* ---------------- COMPONENT ---------------- */
+/*  COMPONENT  */
 function getAuthHeaders(): HeadersInit {
   const token =
     localStorage.getItem("access_token") || "";
@@ -66,7 +66,7 @@ export default function LocationWiseStaffDistribution() {
   const axisColor = isDark ? "#E5E7EB" : "#374151";
   const gridColor = isDark ? "#374151" : "#E5E7EB";
 
-  /* ---------------- FETCH DATA ---------------- */
+  /* FETCH DATA  */
 useEffect(() => {
   const fetchData = async () => {
     try {
@@ -113,7 +113,7 @@ useEffect(() => {
   if (loading) return <div className="p-6">Loading...</div>;
   if (!data) return <div className="p-6 text-red-500">Failed to load location-wise staff data</div>;
 
-  /* ---------------- KPI DATA ---------------- */
+  /*  KPI DATA */
 
   const kpis = [
     { title: "Locations with Max Staff", value: data.kpis.max_location },
@@ -122,7 +122,7 @@ useEffect(() => {
     { title: "Total Locations", value: String(data.kpis.total_locations) },
   ];
 
-  /* ---------------- BAR CHART ---------------- */
+  /* BAR CHART */
 
   const chartData = {
     labels: data.chart.map((c) => c.location),
@@ -205,7 +205,7 @@ const onDownloadReport = async () => {
     setDownloading(false);
   }
 };
-  /* ---------------- UI ---------------- */
+  /*UI */
 
   return (
     <div className="space-y-6 p-6">
@@ -317,7 +317,7 @@ const onDownloadReport = async () => {
   );
 }
 
-/* ---------------- COMPONENTS ---------------- */
+/* COMPONENTS - */
 
 
 function Kpi({ title, value }: { title: string; value: string }) {
