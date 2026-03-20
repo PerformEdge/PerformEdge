@@ -12,6 +12,7 @@ from reportlab.lib.pagesizes import letter
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
+
 def _pdf_make(*, title: str, subtitle: str = "", lines: Optional[list] = None) -> io.BytesIO:
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)
@@ -42,12 +43,14 @@ def _pdf_make(*, title: str, subtitle: str = "", lines: Optional[list] = None) -
     buf.seek(0)
     return buf
 
+
 def _pdf_response(filename: str, buf: io.BytesIO) -> StreamingResponse:
     return StreamingResponse(
         buf,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
 
 @router.get("/latest-date")
 def attendance_latest_date(default_days: int = Query(5, ge=1, le=31)):
@@ -73,20 +76,14 @@ def attendance_latest_date(default_days: int = Query(5, ge=1, le=31)):
 
 
 @router.get("/summary")
-def attendance_summary(
-    start: Optional[str] = Query(None),
-    end: Optional[str] = Query(None),
-    dateRange: Optional[str] = Query(None, alias='dateRange'),
-    department: Optional[str] = Query(None),
-    location: Optional[str] = Query(None)
-        ):
+def attendance_summary(start: Optional[str] = Query(None), end: Optional[str] = Query(None), dateRange: Optional[str] = Query(None, alias='dateRange'), department: Optional[str] = Query(None), location: Optional[str] = Query(None)):
     # resolve date range using shared utility
     start_date, end_date = resolve_date_range(date_range=dateRange, start=start, end=end, default_days=5)
     conn = get_database_connection()
     cur = conn.cursor(dictionary=True)
-
     try:
-        # Calculate attendance KPI counts with optional department and location filters
+        # KPI: Present, Late, On Leave (Absent), and count other statuses
+        # join employees to allow department/location filters
         base_params = [start_date, end_date]
         filter_sql = ""
         if department and department != "All":
@@ -109,13 +106,13 @@ def attendance_summary(
             WHERE ar.date_of_attendance BETWEEN %s AND %s
             """ + filter_sql, tuple(base_params))
         kpis_row = cur.fetchone()
-
+        
         # Convert to proper numbers
         kpis = {
             "present": int(kpis_row["present"] or 0),
             "late": int(kpis_row["late"] or 0),
             "on_leave": int(kpis_row["on_leave"] or 0),
-            "overtime": 0  
+            "overtime": 0  # Simplified - no overtime_sessions in schema
         }
 
         # Late Comers by Department
@@ -214,6 +211,7 @@ def attendance_summary(
     finally:
         cur.close()
         conn.close()
+
 
 @router.get("/report")
 def attendance_report(

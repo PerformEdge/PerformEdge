@@ -108,6 +108,7 @@ def my_performance_report(authorization: Optional[str] = Header(default=None)):
 
     summary = my_performance_summary(authorization)
 
+    # Lazy import (keeps backend usable even if reportlab isn't installed yet)
     try:
         from reportlab.lib.pagesizes import letter
         from reportlab.lib.units import inch

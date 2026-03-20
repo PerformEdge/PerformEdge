@@ -15,18 +15,12 @@ router = APIRouter(prefix="/attendance-location", tags=["Attendance Location"])
 
 # --- Get KPI summary ---
 @router.get("/kpis")
-def get_kpis(
-    dateRange: Optional[str] = Query("", alias="dateRange"),
-    start: Optional[str] = Query(None),
-    end: Optional[str] = Query(None),
-    department: Optional[str] = Query(None),
-    location: Optional[str] = Query(None)
-        ):
+def get_kpis(dateRange: Optional[str] = Query("", alias="dateRange"), start: Optional[str] = Query(None), end: Optional[str] = Query(None), department: Optional[str] = Query(None), location: Optional[str] = Query(None)):
     try:
         # resolve date range if provided; default to last 7 days
         def _resolve(date_range: Optional[str], default_days: int = 7):
             if date_range:
-                parts = re.split(r"\s+to\s+|\s+-\s+", dateRange)
+                parts = re.split(r"\s+to\s+|\s+-\s+", date_range)
                 if len(parts) >= 2:
                     try:
                         s = datetime.strptime(parts[0].strip(), "%Y-%m-%d").date()
@@ -85,7 +79,7 @@ def get_kpis(
         """, tuple(filter_params))
         remote_workers = cur.fetchone()["remote_workers"]
 
-        # Present today
+                # Present count across selected date range
         cur.execute(f"""
             SELECT COUNT(DISTINCT e.employee_id) AS present_today
             FROM employees e
@@ -99,7 +93,7 @@ def get_kpis(
                 """, tuple([s, e] + filter_params))
         present_today = cur.fetchone()["present_today"] or 0
 
-        # Absent today
+                # Absent count across selected date range
         cur.execute(f"""
             SELECT COUNT(DISTINCT e.employee_id) AS absent_today
             FROM employees e
@@ -123,6 +117,7 @@ def get_kpis(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # --- 7-day attendance trend ---
 @router.get("/trend7days")
@@ -152,7 +147,7 @@ def trend_7days(dateRange: Optional[str] = Query("", alias="dateRange"), start: 
         conn = get_database_connection()
         cur = conn.cursor(dictionary=True)
 
-         where_sql = ""
+        where_sql = ""
         params = [start_date, end_date]
         if department and department != "All":
             where_sql += " AND d.department_name = %s"
@@ -174,9 +169,10 @@ def trend_7days(dateRange: Optional[str] = Query("", alias="dateRange"), start: 
             WHERE ar.date_of_attendance BETWEEN %s AND %s
             AND ast.status_name IN ('Present', 'Late', 'Work From Home')
             AND e.employement_status = 'ACTIVE'
+        """ + where_sql + """
             GROUP BY label, l.location_name
             ORDER BY label ASC
-        """, (start_date, end_date))
+        """, tuple(params))
         rows = cur.fetchall()
         conn.close()
 
@@ -194,19 +190,19 @@ def trend_7days(dateRange: Optional[str] = Query("", alias="dateRange"), start: 
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
+
 # --- Location summary endpoint ---
 @router.get("/summary")
 def location_summary(dateRange: Optional[str] = Query("", alias="dateRange"), start: Optional[str] = Query(None), end: Optional[str] = Query(None), location: Optional[str] = Query(None), department: Optional[str] = Query(None)):
     try:
-        # resolve date range if provided; default to today (summary for a single day)
+        # resolve date range if provided
         if start and end:
             try:
                 start_date = datetime.strptime(start.strip(), "%Y-%m-%d").date()
                 end_date = datetime.strptime(end.strip(), "%Y-%m-%d").date()
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid start/end format. Use YYYY-MM-DD")
-            today = end_date
         elif dateRange:
             parts = re.split(r"\s+to\s+|\s+-\s+", dateRange)
             if len(parts) >= 2:
@@ -217,10 +213,8 @@ def location_summary(dateRange: Optional[str] = Query("", alias="dateRange"), st
                     raise HTTPException(status_code=400, detail="Invalid dateRange format. Use YYYY-MM-DD to YYYY-MM-DD")
             else:
                 raise HTTPException(status_code=400, detail="Invalid dateRange format. Use YYYY-MM-DD to YYYY-MM-DD")
-            # for summary we use the end_date to show attendance for that day
-            today = end_date
         else:
-            today = datetime.now().date()
+            end_date = datetime.now().date()
             start_date = end_date - timedelta(days=6)
 
         conn = get_database_connection()
@@ -247,6 +241,7 @@ def location_summary(dateRange: Optional[str] = Query("", alias="dateRange"), st
             LEFT JOIN departments d ON d.department_id = e.department_id
             LEFT JOIN attendance_records ar ON e.employee_id = ar.employee_id AND ar.date_of_attendance BETWEEN %s AND %s
             LEFT JOIN attendance_status_type ast ON ar.status_id = ast.status_id
+        """ + where_sql + """
             GROUP BY l.location_id, l.location_name
             ORDER BY l.location_name ASC
         """, tuple(params))
@@ -263,7 +258,11 @@ def location_summary(dateRange: Optional[str] = Query("", alias="dateRange"), st
             })
 
         return result
-    
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- PDF Helper Functions ---
 
 def _pdf_make(title: str, subtitle: str, filters: dict, lines: List[str]):
@@ -328,6 +327,7 @@ def _pdf_make(title: str, subtitle: str, filters: dict, lines: List[str]):
     buf.seek(0)
     return buf
 
+
 def _pdf_response(filename: str, buf: io.BytesIO):
     """Return a PDF file as a streaming response."""
     return StreamingResponse(
@@ -335,6 +335,7 @@ def _pdf_response(filename: str, buf: io.BytesIO):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
 
 # --- Helper function to get location attendance data ---
 
@@ -433,6 +434,7 @@ def location_summary_stats(date_range: str = "", location: str = ""):
         }
     except Exception as e:
         return {}
+
 
 # --- Download Report Endpoints ---
 
@@ -621,10 +623,7 @@ def location_trend_report(
     return _pdf_response("location_attendance_trend_report.pdf", buf)
 
 
-# -----------------------------------------------------------------------------
 # Download Report endpoints (Performance / Training / Appraisals / Overview)
-# -----------------------------------------------------------------------------
-
 
 try:
     # Prefer the real implementations from the performance module when available.
@@ -792,6 +791,7 @@ def training_report(
     )
     return _pdf_response("training_needs_report.pdf", buf)
 
+
 @router.get("/appraisals/report")
 def appraisals_report(
     date_range: str = Query("", alias="dateRange"),
@@ -940,6 +940,3 @@ def overview_report(
         lines=lines,
     )
     return _pdf_response("performance_overview_report.pdf", buf)
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))

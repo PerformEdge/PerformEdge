@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from database import get_database_connection
 from date_utils import resolve_date_range
 from datetime import date

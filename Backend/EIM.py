@@ -14,8 +14,6 @@ router = APIRouter(prefix="/eim", tags=["EIM"])
 
 
 #  COMPANY RESOLUTION 
-
-
 def _company_id_from_token(authorization: Optional[str]) -> Optional[str]:
     if not authorization:
         return None
@@ -41,8 +39,6 @@ def _resolve_company_id(company_id_query: Optional[str], authorization: Optional
 
 
 #  MAIN EIM DASHBOARD
-
-
 @router.get("/dashboard")
 def eim_dashboard(
     date_range: str = Query("", alias="dateRange"),
@@ -357,8 +353,6 @@ def eim_dashboard(
 
 
 #  PDF REPORT
-
-
 def _pdf_make(
     *,
     title: str,

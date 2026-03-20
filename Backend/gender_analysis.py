@@ -21,11 +21,7 @@ from date_utils import resolve_date_range, active_during_range_sql
 
 router = APIRouter(prefix="/eim", tags=["Gender Analysis"])
 
-
-# ============================================================
 # 🔐 COMPANY RESOLUTION
-# ============================================================
-
 def _company_id_from_token(authorization: Optional[str]) -> Optional[str]:
     if not authorization:
         return None
@@ -44,16 +40,16 @@ def _resolve_company_id(
     authorization: Optional[str],
 ) -> str:
 
-    # 1️⃣ Query override (testing only)
+    # Query override (testing only)
     if company_id_query:
         return company_id_query
 
-    # 2️⃣ From JWT token
+    # From JWT token
     cid = _company_id_from_token(authorization)
     if cid:
         return cid
 
-    # 3️⃣ No company → reject
+    # No company → reject
     raise HTTPException(status_code=401, detail="Company not resolved")
 
 
@@ -122,11 +118,7 @@ def _get_gender_analysis_data(
         "employees": employees
     }
 
-
-# ==============================
 # GET DATA
-# ==============================
-
 @router.get("/gender-analysis")
 def get_gender_analysis(
      date_range: str = Query("", alias="dateRange"),
@@ -144,11 +136,7 @@ def get_gender_analysis(
         location=location,
     )
 
-
-# ==============================
 # DOWNLOAD PDF REPORT
-# ==============================
-
 @router.get("/gender-analysis/report")
 def download_gender_report(
     date_range: str = Query("", alias="dateRange"),

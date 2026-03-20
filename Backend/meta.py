@@ -9,6 +9,7 @@ from security import verify_token
 
 router = APIRouter(prefix="/meta", tags=["Meta"])
 
+
 # Auth helpers
 
 def _fetch_all(sql: str, params: Tuple[Any, ...] = ()) -> List[Dict[str, Any]]:
@@ -35,7 +36,7 @@ def _company_id_from_token(authorization: Optional[str]) -> Optional[str]:
 
 
 def _resolve_company_id(company_id_query: Optional[str], authorization: Optional[str]) -> str:
-    # 1) Query param wins
+    # 1) Query param wins (useful for local testing)
     if company_id_query:
         return company_id_query
 
@@ -46,6 +47,7 @@ def _resolve_company_id(company_id_query: Optional[str], authorization: Optional
 
     # 3) Fallback
     return "C001"
+
 
 # Endpoints
 

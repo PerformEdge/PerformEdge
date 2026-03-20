@@ -13,8 +13,6 @@ router = APIRouter(prefix="/eim", tags=["EIM"])
 
 
 #  COMPANY RESOLUTION
-
-
 def _company_id_from_token(authorization: Optional[str]) -> Optional[str]:
     if not authorization:
         return None
@@ -33,23 +31,21 @@ def _resolve_company_id(
     authorization: Optional[str],
 ) -> str:
 
-    # 1 Query override (testing only)
+    # Query override (testing only)
     if company_id_query:
         return company_id_query
 
-    # 2 From JWT token
+    # From JWT token
     cid = _company_id_from_token(authorization)
     if cid:
         return cid
 
-    # 3 No company → reject
+    # No company → reject
     raise HTTPException(status_code=401, detail="Company not resolved")
 
 
 
 #  MAIN ENDPOINT
-
-
 @router.get("/location-wise-staff")
 def location_wise_staff_distribution(
     date_range: str = Query("", alias="dateRange"),
@@ -159,10 +155,7 @@ def location_wise_staff_distribution(
         conn.close()
 
 
-
 #  PDF GENERATOR
-
-
 def _pdf_make(
     *,
     title: str,
@@ -232,8 +225,6 @@ def _pdf_response(filename: str, buf: io.BytesIO) -> StreamingResponse:
 
 
 #  REPORT ENDPOINT
-
-
 @router.get("/location-wise-staff/report")
 def location_wise_staff_report(
     date_range: str = Query("", alias="dateRange"),

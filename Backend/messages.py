@@ -13,7 +13,6 @@ from security import verify_token
 router = APIRouter(prefix="/messages", tags=["Messages"])
 
 # DB helpers
-
 def _fetch_all(sql: str, params: Tuple[Any, ...] = ()) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     try:
@@ -46,7 +45,6 @@ def _execute(sql: str, params: Tuple[Any, ...] = ()) -> int:
             pass
 
 # Auth helpers
-
 def _payload_from_token(authorization: Optional[str]) -> Dict[str, Any]:
     if not authorization:
         return {}
@@ -63,6 +61,7 @@ def _resolve_user_id(user_id_query: Optional[int], authorization: Optional[str])
     if payload.get("user_id") is not None:
         return int(payload["user_id"])
     return 1
+
 
 # API
 

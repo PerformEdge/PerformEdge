@@ -14,7 +14,6 @@ router = APIRouter(prefix="/eim", tags=["EIM"])
 
 #  COMPANY FROM TOKEN
 
-
 def _get_company_id(authorization: Optional[str]) -> str:
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
@@ -34,8 +33,6 @@ def _get_company_id(authorization: Optional[str]) -> str:
 
 
 #  MAIN ENDPOINT
-
-
 @router.get("/contract-type-distribution")
 def contract_type_distribution(
     date_range: str = Query("", alias="dateRange"),
@@ -163,8 +160,6 @@ def contract_type_distribution(
 
 
 #  PDF GENERATOR
-
-
 def _pdf_make(title: str, 
     subtitle: str = "",filters: Dict[str, str] = None, lines: List[str] = None) -> io.BytesIO:
     buf = io.BytesIO()
@@ -227,8 +222,6 @@ def _pdf_response(filename: str, buf: io.BytesIO):
 
 
 #  REPORT ENDPOINT
-
-
 @router.get("/contract-type-distribution/report")
 def contract_type_distribution_report(
     authorization: Optional[str] = Header(None),

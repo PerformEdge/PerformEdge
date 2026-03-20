@@ -49,8 +49,8 @@ def employee_dashboard_overview(authorization: Optional[str] = Header(default=No
     )
     employee = cur.fetchone() or {}
 
+    
     # Leave summary
-
     entitlements = {
         "Annual": 14,
         "Sick": 7,
@@ -112,6 +112,7 @@ def employee_dashboard_overview(authorization: Optional[str] = Header(default=No
     total_entitled = 0
     total_used = 0
 
+    # include also any leave types used that are not in entitlements
     for lt in sorted(set(list(entitlements.keys()) + list(used_by_type.keys()))):
         total = int(entitlements.get(lt, 0))
         used = int(used_by_type.get(lt, 0))
@@ -138,7 +139,6 @@ def employee_dashboard_overview(authorization: Optional[str] = Header(default=No
     }
 
     # Performance summary + trend
-
     cur.execute(
         """
         SELECT
@@ -207,7 +207,8 @@ def employee_dashboard_overview(authorization: Optional[str] = Header(default=No
     }
 
     # Training summary
-
+    # The shipped schema uses a single `status` field.
+    # Expose a friendlier summary for the UI.
     cur.execute(
         """
         SELECT
@@ -231,7 +232,6 @@ def employee_dashboard_overview(authorization: Optional[str] = Header(default=No
         training["total"] += cnt
 
     # New joiners (company)
-
     cur.execute(
         """
         SELECT e.employee_id, e.full_name, e.employee_code, e.join_date, d.department_name
@@ -255,7 +255,7 @@ def employee_dashboard_overview(authorization: Optional[str] = Header(default=No
     ]
 
     # Upcoming birthdays (company)
-
+    # Pull a small set and compute days-until in Python to keep SQL simple.
     cur.execute(
         """
         SELECT employee_id, employee_code, full_name, date_of_birth AS birth_date, d.department_name

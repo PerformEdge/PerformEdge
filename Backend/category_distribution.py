@@ -12,10 +12,7 @@ from date_utils import resolve_date_range, active_during_range_sql
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
 
-# ============================================================
-# 🔐 COMPANY FROM TOKEN
-# ============================================================
-
+# COMPANY FROM TOKEN
 def _get_company_id(authorization: Optional[str]) -> str:
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
@@ -32,14 +29,7 @@ def _get_company_id(authorization: Optional[str]) -> str:
 
     return company_id
 
-
-
-
-
-# ============================================================
-# 📊 CATEGORY DISTRIBUTION
-# ============================================================
-
+# CATEGORY DISTRIBUTION
 @router.get("/category-distribution")
 def category_distribution(
     date_range: str = Query("", alias="dateRange"),
@@ -141,7 +131,7 @@ def category_distribution(
 
         employees = cursor.fetchall()
 
-        # 🔥 IMPORTANT: Always return labels & values
+        # IMPORTANT: Always return labels & values
         return {
             "labels": ["Academic", "Administrative"],
             "values": [academic, administrative],
@@ -155,10 +145,7 @@ def category_distribution(
         conn.close()
 
 
-# ============================================================
-# 📄 PDF GENERATOR
-# ============================================================
-
+# PDF GENERATOR
 def _pdf_make(title: str, 
     subtitle: str = "",filters: Dict[str, str] = None, lines: List[str] = None) -> io.BytesIO:
     buf = io.BytesIO()
@@ -219,11 +206,7 @@ def _pdf_response(filename: str, buf: io.BytesIO):
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
-
-# ============================================================
-# 📥 REPORT ENDPOINT
-# ============================================================
-
+#  REPORT ENDPOINT
 @router.get("/category-distribution/report")
 def category_distribution_report(
     authorization: Optional[str] = Header(None),

@@ -8,10 +8,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
+# Report generation (PDF)
 try:
+    # Optional dependency (used only for PDF reports).
     from reportlab.lib.pagesizes import letter
     from reportlab.pdfgen import canvas
-except Exception: 
+except Exception:  # pragma: no cover
     letter = None
     canvas = None
 
@@ -22,7 +24,6 @@ from security import verify_token
 router = APIRouter(prefix="/performance", tags=["Performance"])
 
 # PDF helpers (Download Report)
-
 def _pdf_make(
     *,
     title: str,
@@ -79,6 +80,7 @@ def _pdf_make(
         c.drawString(x, y, str(line))
         y -= 13
 
+    # Do NOT call showPage() here, otherwise an extra blank page is appended.
     c.save()
     buf.seek(0)
     return buf
@@ -90,6 +92,7 @@ def _pdf_response(filename: str, buf: io.BytesIO) -> StreamingResponse:
         "Cache-Control": "no-store",
     }
     return StreamingResponse(buf, media_type="application/pdf", headers=headers)
+
 
 # DB helpers
 
@@ -109,6 +112,7 @@ def _fetch_all(sql: str, params: Tuple[Any, ...] = ()) -> List[Dict[str, Any]]:
 def _fetch_one(sql: str, params: Tuple[Any, ...] = ()) -> Optional[Dict[str, Any]]:
     rows = _fetch_all(sql, params)
     return rows[0] if rows else None
+
 
 # Auth / filters
 
@@ -173,6 +177,7 @@ def _resolve_location_id(company_id: str, location: str) -> Optional[str]:
     )
     return row["location_id"] if row else None
 
+
 # Cycle / rating helpers
 
 def _parse_date_range(date_range: str) -> Optional[Tuple[date, date]]:
@@ -215,6 +220,9 @@ def _pick_cycle(company_id: str, date_range: str) -> Optional[Dict[str, Any]]:
         )
         if row:
             return row
+
+        # Date range was explicitly provided, but no overlapping cycle exists.
+        # Do not silently fallback to another cycle, otherwise filters appear ignored.
         return None
 
     # 2) Current cycle (today between dates)
@@ -291,7 +299,6 @@ def performance_overview(
     cycle = _pick_cycle(cid, date_range)
 
     # Ranking distribution
-
     scale = _get_rating_scale(cid)
     cycle_id = cycle["cycle_id"] if cycle else None
 
@@ -330,7 +337,6 @@ def performance_overview(
             ranking_legend.append({"name": r["rating_name"], "value": pct})
 
     # Training needs
-
     train_sql = """
       SELECT tc.category_name, tc.color_hex, COUNT(*) AS cnt
       FROM training_requests tr
@@ -364,7 +370,6 @@ def performance_overview(
     ]
 
     # Appraisals completion
-
     app_sql = """
       SELECT pa.status
       FROM performance_appraisals pa
@@ -407,7 +412,7 @@ def performance_overview(
             excellent_bucket = r.get("rating_name")
             break
     if not excellent_bucket and scale:
-        excellent_bucket = scale[0].get("rating_name") 
+        excellent_bucket = scale[0].get("rating_name")  # best bucket
 
     bucketed = [_bucket(scale, s).get("rating_name") for s in scores]
     excellence_rate = round((bucketed.count(excellent_bucket) / len(bucketed)) * 100) if bucketed else 0
@@ -464,7 +469,7 @@ def performance_overview(
                 "dueText": due_text or "Due date: -",
             },
         },
-        "_debug": {  
+        "_debug": {  # helps you confirm what the backend auto-selected
             "company_id": cid,
             "cycle_id": cycle_id,
             "department_id": dep_id,
@@ -473,7 +478,8 @@ def performance_overview(
         },
     }
 
-# 1) Ranking Distribution (page)
+
+# Ranking Distribution (page)
 
 @router.get("/ranking")
 def performance_ranking(
@@ -524,6 +530,7 @@ def performance_ranking(
     scores = [int(r["overall_score"]) for r in rows]
     avg_score = round(sum(scores) / len(scores)) if scores else 0
 
+    # Determine what we call "excellent" for the excellence rate.
     excellent_names = {"excellent", "outstanding"}
     excellent_bucket = None
     for r in scale:
@@ -531,7 +538,7 @@ def performance_ranking(
             excellent_bucket = r["rating_name"]
             break
     if not excellent_bucket and scale:
-        excellent_bucket = scale[0]["rating_name"] 
+        excellent_bucket = scale[0]["rating_name"]  # best bucket
 
     bucketed = [_bucket(scale, s)["rating_name"] for s in scores]
     excellence_rate = round((bucketed.count(excellent_bucket) / len(bucketed)) * 100) if bucketed else 0
@@ -587,7 +594,8 @@ def performance_ranking(
         },
     }
 
-# 2) Training Needs (page)
+
+# Training Needs (page)
 
 @router.get("/training")
 def training_needs(
@@ -695,6 +703,7 @@ def training_needs(
     if ap and ap["total"]:
         avg_completion = round((int(ap["approved"]) / int(ap["total"])) * 100)
 
+    # Table (fixed 4 categories for the UI)
     table_sql = """
       SELECT
         e.employee_id,
@@ -756,7 +765,7 @@ def training_needs(
         total = emp["technical"] + emp["softSkills"] + emp["leadership"] + emp["compliance"]
         if total <= 0:
             continue
-
+        # Convert category request counts into integer percentages that sum to 100.
         cats = ["technical", "softSkills", "leadership", "compliance"]
         raw = [(emp[c] / total) * 100 for c in cats]
         floors = [int(x) for x in raw]
@@ -797,7 +806,7 @@ def training_needs(
         },
     }
 
-# 3) Appraisals Completion (page)
+# Appraisals Completion (page)
 
 @router.get("/appraisals")
 def appraisals_completion(
@@ -912,6 +921,7 @@ def appraisals_completion(
             "dateRange": date_range,
         },
     }
+
 
 # Download Report endpoints
 

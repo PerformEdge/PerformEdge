@@ -33,7 +33,6 @@ def _get_company_id(authorization: Optional[str]) -> str:
 
 #  BUSINESS LOGIC (REUSABLE FUNCTION)
 
-
 def _get_service_year_data(
     company_id: str,
     date_range: Optional[str] = "",
@@ -176,8 +175,6 @@ def service_year_analysis(
 
 
 #  PDF GENERATOR
-
-   
 def _pdf_make(
     *,
     title: str,
@@ -241,7 +238,6 @@ def _pdf_make(
     return buf
 
 #  REPORT ENDPOINT
-
 
 @router.get("/service-year-analysis/report")
 def service_year_analysis_report(

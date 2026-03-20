@@ -50,6 +50,7 @@ def new_joiners(authorization: Optional[str] = Header(default=None), limit: int 
 def upcoming_birthdays(
     authorization: Optional[str] = Header(default=None),
     max_days: int = 30,
+    # Backwards/forwards compatibility: some UIs use ?days=...
     days: Optional[int] = None,
 ):
     payload = _require_payload(authorization)

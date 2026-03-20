@@ -19,10 +19,7 @@ import os
 
 router = APIRouter(prefix="/eim", tags=["Upcoming Birthdays"])
 
-# ============================================================
-# 🔐 COMPANY FROM TOKEN
-# ============================================================
-
+#  COMPANY FROM TOKEN
 def _get_company_id(authorization: Optional[str]) -> str:
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")

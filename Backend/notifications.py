@@ -56,6 +56,7 @@ def _resolve_user_id(user_id_query: Optional[int], authorization: Optional[str])
     payload = _payload_from_token(authorization)
     if payload.get("user_id") is not None:
         return int(payload["user_id"])
+    # Fallback for local testing
     return 1
 
 # API

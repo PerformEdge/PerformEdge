@@ -165,10 +165,7 @@ def seven_day_trend(start: Optional[date] = Query(None), end: Optional[date] = Q
         conn.close()
 
 
-# -----------------------------------------------------------------------------
 # Download Report endpoints (reused helpers from attendance_location)
-# -----------------------------------------------------------------------------
-
 
 @router.get("/ranking/report")
 def ranking_report(
@@ -432,11 +429,8 @@ def overview_report(
     return _pdf_response("performance_overview_report.pdf", buf)
 
 
-# -----------------------------------------------------------------------------
+
 # Latecomers PDF report (Department Wise / 7-day trend)
-# -----------------------------------------------------------------------------
-
-
 @router.get("/report")
 def latecomers_report(
     start: Optional[date] = None,

@@ -14,8 +14,6 @@ router = APIRouter(prefix="/eim", tags=["EIM"])
 
 
 #  GET COMPANY ID FROM JWT
-
-
 def _get_company_id(authorization: Optional[str]) -> str:
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
@@ -87,7 +85,6 @@ def staff_analysis(
 
     try:
         #  KPIs 
-
         cursor.execute(f"""
             SELECT COUNT(*) AS total
             FROM employees e
@@ -124,7 +121,6 @@ def staff_analysis(
         pending_recruit = cursor.fetchone()["pending"] or 0
 
         #  TREND 
-
         cursor.execute(f"""
             SELECT MONTH(e.join_date) AS month, COUNT(*) AS count
             FROM employees e
@@ -159,7 +155,6 @@ def staff_analysis(
         }
 
         #  DISTRIBUTION 
-
         current_staff = total_staff - resigned_staff
 
         distribution = {
@@ -169,7 +164,6 @@ def staff_analysis(
         }
 
         #  NEW JOINERS LIST 
-
         cursor.execute(f"""
             SELECT e.full_name AS name,
                    d.department_name AS department,
@@ -185,7 +179,6 @@ def staff_analysis(
         new_joiners_list = cursor.fetchall()
 
         #  RESIGNED LIST 
-
         cursor.execute(f"""
             SELECT e.full_name AS name,
                    d.department_name AS department,
@@ -220,8 +213,6 @@ def staff_analysis(
 
 
 #  PDF GENERATOR
-
-
 def _pdf_make(title: str, filters: Dict[str, str], lines: List[str]) -> io.BytesIO:
 
     buf = io.BytesIO()
@@ -265,7 +256,6 @@ def _pdf_response(filename: str, buf: io.BytesIO):
 
 
 #  REPORT DOWNLOAD ENDPOINT
-
 
 @router.get("/staff-analysis/report")
 def staff_analysis_report(
