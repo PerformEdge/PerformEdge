@@ -1,0 +1,31 @@
+/* PAGE BACKGROUND */
+.signup-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(var(--primary));
+  padding: 1rem;
+}
+
+/* CARD */
+.signup-card {
+  width: 100%;
+  max-width: 400px;
+  background: hsl(var(--card));
+  border-radius: 1.5rem;
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.35);
+}
+
+/* CONTENT */
+.signup-content {
+  padding: 2rem;
+}
+
+/* BRAND */
+.brand-icon-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+}
