@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 const API_BASE = "http://localhost:8000";
 
-/* ================= TYPES ================= */
+/* TYPES */
 
 interface ApiResponse {
   kpis: {
@@ -41,7 +41,7 @@ interface ApiResponse {
 }
 
 
-/* ================= AUTH HEADER ================= */
+/*  AUTH HEADER  */
 function getAuthHeaders(): HeadersInit {
   const token =
     localStorage.getItem("access_token") || "";
@@ -53,9 +53,7 @@ function getAuthHeaders(): HeadersInit {
 }
 
 
-
-
-/* ================= COMPONENT ================= */
+/*  COMPONENT  */
 
 export default function StaffAnalysis() {
   const isDark = document.documentElement.classList.contains("dark");
@@ -69,7 +67,7 @@ export default function StaffAnalysis() {
   const [location, setLocation] = useState<string>("");
   const [downloading, setDownloading] = useState(false);
 
-  /* ================= FETCH DATA ================= */
+  /* FETCH DATA */
 
   useEffect(() => {
     const fetchData = async () => {
@@ -118,7 +116,7 @@ export default function StaffAnalysis() {
     return <div className="p-6 text-red-500">No data available</div>;
   }
 
-  /* ================= LINE CHART ================= */
+  /* LINE CHART  */
 
   const lineData = {
     labels: data.trend.months,
@@ -157,7 +155,7 @@ export default function StaffAnalysis() {
     },
   };
 
-  /* ================= DONUT ================= */
+  /*  DONUT  */
 
   const donutData = {
     labels: ["New Joiners", "Current Staff", "Resigned"],
@@ -186,7 +184,7 @@ export default function StaffAnalysis() {
     },
   };
 
-  /* ================= DOWNLOAD ================= */
+  /*  DOWNLOAD  */
 
   const onDownloadReport = async () => {
     try {
@@ -227,7 +225,7 @@ export default function StaffAnalysis() {
     }
   };
 
-  /* ================= UI ================= */
+  /*  UI  */
 
   return (
     <div className="space-y-6 p-6">
@@ -306,7 +304,7 @@ export default function StaffAnalysis() {
   );
 }
 
-/* ================= UI HELPERS ================= */
+/*  UI HELPERS  */
 
 function StatCard({
   title,
