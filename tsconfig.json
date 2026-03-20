@@ -21,7 +21,10 @@
       ]
     },
     "types": [
-      "vite/client"
+      "vite/client",
+      "react",
+      "react-dom",
+      "node"
     ],
     "strict": false
   },

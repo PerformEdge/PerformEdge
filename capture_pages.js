@@ -1,5 +1,8 @@
 import { chromium } from 'playwright';
 
+const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || 'http://localhost:5173';
+const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
+
 async function capture(url, name, page) {
   console.log('NAVIGATING', url);
   try {
@@ -19,12 +22,11 @@ async function capture(url, name, page) {
 
   page.on('console', msg => console.log('PAGE_CONSOLE', msg.type(), msg.text()));
   page.on('pageerror', err => console.log('PAGE_ERROR', err.message));
-  page.on('request', req => { if (req.url().includes('localhost:8000')) console.log('REQ', req.method(), req.url()); });
-  page.on('response', resp => { if (resp.url().includes('localhost:8000')) console.log('RESP', resp.status(), resp.url()); });
+  page.on('request', req => { if (req.url().includes(API_BASE_URL)) console.log('REQ', req.method(), req.url()); });
+  page.on('response', resp => { if (resp.url().includes(API_BASE_URL)) console.log('RESP', resp.status(), resp.url()); });
 
-  const base = 'http://localhost:5174';
-  await capture(`${base}/dashboard/attendance/latecomers-analysis`, 'latecomers', page);
-  await capture(`${base}/dashboard/attendance/no-pay-leave-percentage`, 'no_pay', page);
+  await capture(`${FRONTEND_BASE_URL}/dashboard/attendance/latecomers-analysis`, 'latecomers', page);
+  await capture(`${FRONTEND_BASE_URL}/dashboard/attendance/no-pay-leave-percentage`, 'no_pay', page);
 
   await browser.close();
   process.exit(0);

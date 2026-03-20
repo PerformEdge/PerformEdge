@@ -1,5 +1,8 @@
 import { chromium } from 'playwright';
 
+const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || 'http://localhost:5173';
+const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
+
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage();
@@ -8,17 +11,17 @@ import { chromium } from 'playwright';
   page.on('pageerror', err => console.log('PAGE_ERROR', err.message));
   page.on('request', req => {
     const url = req.url();
-    if (url.includes('localhost:8000')) console.log('REQ', req.method(), url);
+    if (url.includes(API_BASE_URL)) console.log('REQ', req.method(), url);
   });
   page.on('response', resp => {
     const url = resp.url();
-    if (url.includes('localhost:8000')) console.log('RESP', resp.status(), url);
+    if (url.includes(API_BASE_URL)) console.log('RESP', resp.status(), url);
   });
 
-  const target = 'http://localhost:5174/dashboard/performance';
+  const target = `${FRONTEND_BASE_URL}/dashboard/performance`;
   console.log('NAVIGATING', target);
   try {
-    await page.goto(target, { waitUntil: 'networkidle' , timeout: 30000});
+    await page.goto(target, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForTimeout(2000);
     console.log('PAGE_TITLE', await page.title());
     await page.screenshot({ path: 'performance_page.png', fullPage: true });
