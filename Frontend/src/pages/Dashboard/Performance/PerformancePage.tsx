@@ -101,6 +101,8 @@ export default function PerformancePage() {
     };
   }, [dateRange, department, location]);
 
+  // Support both the older nested API shape (ranking/training/appraisals)
+  // and the flattened API shape (ranking_chart/training_bars/appraisals_chart).
   const rankingChart = data?.ranking_chart || (data as any)?.ranking?.chart || [];
   const trainingBars = data?.training_bars || (data as any)?.training?.bars || [];
   const appraisalsChart =
