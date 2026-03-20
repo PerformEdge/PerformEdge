@@ -102,7 +102,7 @@ export default function ContractTypeDistribution() {
     fetchData();
   }, [dateRange, department, location]);
 
-  /*  LOADING  */
+  /* ---------------- LOADING ---------------- */
 
   if (loading) {
     return <div className="p-6">Loading Contract Type Distribution...</div>;
@@ -112,7 +112,7 @@ if (!data) {
   return <div className="p-6 text-red-500">Failed to load contract data</div>;
 }
 
-  /*  KPI LIST */
+  /* ---------------- KPI LIST ---------------- */
 
   const kpis = [
     { title: "Total Staff", value: data.kpis.total },
@@ -121,7 +121,7 @@ if (!data) {
     { title: "Probation", value: data.kpis.probation },
   ];
 
-  /*  CHART  */
+  /* ---------------- CHART ---------------- */
 
   const colors: Record<string, string> = {
     Permanent: "#3B82F6",
@@ -157,7 +157,7 @@ if (!data) {
     },
   };
 
-  /*  DOWNLOAD  */
+  /* ---------------- DOWNLOAD ---------------- */
 
   const onDownloadReport = async () => {
     try {
@@ -198,7 +198,7 @@ if (!data) {
     }
   };
 
-  /*  UI  */
+  /* ---------------- UI ---------------- */
 
   return (
     <div className="space-y-6 p-6">
@@ -289,7 +289,7 @@ if (!data) {
   );
 }
 
-/*  UI COMPONENTS  */
+/* ---------------- UI COMPONENTS ---------------- */
 
 function LegendRow({
   label,

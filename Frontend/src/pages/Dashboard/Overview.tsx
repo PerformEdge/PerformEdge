@@ -51,6 +51,9 @@ const API_URL = "http://localhost:8000/dashboard/overview";
 export default function Overview() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Default to the last 12 months so demo data (2024/2025) still appears
+  // even when the current year is ahead of the seeded SQL.
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setFullYear(d.getFullYear() - 1);

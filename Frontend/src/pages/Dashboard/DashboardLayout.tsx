@@ -73,12 +73,14 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
 
   React.useEffect(() => {
+    // Basic auth guard (keeps dashboard from opening without login)
     const token = getAccessToken();
     if (!token) {
       navigate("/login");
       return;
     }
 
+    // Optional role guard (prevents employees opening HR dashboard)
     const role = getStoredRole();
     if (role === "employee") {
       toast.error("Access denied: this account is not a Manager. Redirecting to the Employee dashboard.");
@@ -93,6 +95,7 @@ export default function DashboardLayout() {
     setRoleLabel(r === "employee" ? "Employee" : "Manager");
   }, []);
 
+  // Keep the top search bar in sync with the search page query param
   React.useEffect(() => {
     if (!location.pathname.startsWith("/dashboard/search")) return;
     const params = new URLSearchParams(location.search);
@@ -100,6 +103,7 @@ export default function DashboardLayout() {
     setSearchQuery(q);
   }, [location.pathname, location.search]);
 
+  // Fetch unread counts for notification + message icons
   React.useEffect(() => {
     const controller = new AbortController();
 
@@ -125,6 +129,7 @@ export default function DashboardLayout() {
           setUnreadMessages(Number(j.count || 0));
         }
       } catch {
+        // Silent (UI still works)
       }
     }
 
@@ -132,6 +137,7 @@ export default function DashboardLayout() {
     return () => controller.abort();
   }, []);
 
+  // Search suggestions (debounced)
   React.useEffect(() => {
     const q = searchQuery.trim();
     if (q.length < 2) {
@@ -172,6 +178,7 @@ export default function DashboardLayout() {
         <aside
           className={cn(
             "sticky top-0 h-screen shrink-0 border-r border-border",
+            // A slightly more polished sidebar in both themes
             "bg-gradient-to-b from-[#C94A46] to-[#8C1007] text-white",
             "dark:from-[#7f1d1d] dark:to-[#450a0a]",
             sidebarOpen ? "w-64" : "w-[76px]"
@@ -282,6 +289,7 @@ export default function DashboardLayout() {
                             key={s.employee_id || s.email || s.name}
                             type="button"
                             onMouseDown={() => {
+                              // Use mouse down to beat the input blur
                               const q = (s.name || s.email || "").toString();
                               setSearchQuery(q);
                               navigate(`/dashboard/search?q=${encodeURIComponent(q)}`);

@@ -5,10 +5,10 @@ import PerformanceFilters from "@/components/PerformanceFilters";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 
-/* API BASE  */
+/* ---------------- API BASE ---------------- */
 const API_BASE = "http://localhost:8000";
 
-/*  TYPES  */
+/* ---------------- TYPES ---------------- */
 interface ApiResponse {
   chart: {
     labels: string[];
@@ -26,7 +26,7 @@ interface ApiResponse {
   }[];
 }
 
-/* AUTH HEADER */
+/* ---------------- AUTH HEADER ---------------- */
 function getAuthHeaders(): HeadersInit {
   const token =
     localStorage.getItem("access_token") || "";
@@ -37,7 +37,7 @@ function getAuthHeaders(): HeadersInit {
   };
 }
 
-/*  COMPONENT  */
+/* ---------------- COMPONENT ---------------- */
 export default function ServiceYearAnalysis() {
   const isDark = document.documentElement.classList.contains("dark");
 
@@ -48,7 +48,7 @@ export default function ServiceYearAnalysis() {
   const [location, setLocation] = useState("");
   const [downloading, setDownloading] = useState(false);
 
-  /*  FETCH DATA  */
+  /* ---------------- FETCH DATA ---------------- */
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -89,7 +89,7 @@ export default function ServiceYearAnalysis() {
   if (loading) return <div className="p-6">Loading...</div>;
   if (!data) return <div className="p-6 text-red-500">Failed to load data</div>;
 
-  /*  CHART  */
+  /* ---------------- CHART ---------------- */
   const chartData = {
     labels: data.chart.labels,
     datasets: [
@@ -117,7 +117,7 @@ export default function ServiceYearAnalysis() {
     },
   };
 
-  /*  DOWNLOAD  */
+  /* ---------------- DOWNLOAD ---------------- */
   const onDownloadReport = async () => {
     setDownloading(true);
 
@@ -152,7 +152,7 @@ export default function ServiceYearAnalysis() {
     }
   };
 
-  /*  UI  */
+  /* ---------------- UI ---------------- */
   return (
     <div className="space-y-6 p-6">
       <div className="flex justify-between flex-wrap gap-4">
@@ -231,7 +231,7 @@ export default function ServiceYearAnalysis() {
   );
 }
 
-/* CARD  */
+/* ---------------- CARD ---------------- */
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-2xl border bg-card text-card-foreground p-5 shadow-sm">

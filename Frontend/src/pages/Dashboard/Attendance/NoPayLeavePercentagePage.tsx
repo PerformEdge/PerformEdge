@@ -115,7 +115,7 @@ export default function NoPayLeavePercentagePage() {
     }
   }
 
- /* ================= FETCH DONUT ================= */
+  /* ================= FETCH DONUT ================= */
   async function fetchByDepartment() {
     try {
       const res = await fetch(`${API_BASE}/no-pay/by-department?start=${start}&end=${end}&department=${encodeURIComponent(department)}&location=${encodeURIComponent(locationFilter)}`);

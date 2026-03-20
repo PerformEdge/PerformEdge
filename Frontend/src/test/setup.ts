@@ -91,7 +91,7 @@ class MockIntersectionObserver {
 beforeEach(() => {
   installMockApiSuccess();
   localStorage.clear();
-  localStorage.setItem("access_token", "fake-token");
+  localStorage.setItem("access_token", "eyJhbGciOiJIUzI1NiJ9.e30.test-signature");
   Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: vi.fn().mockImplementation((query) => ({

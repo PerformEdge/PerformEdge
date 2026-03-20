@@ -38,7 +38,7 @@ export function describeRenderableModule(
       vi.spyOn(console, "error").mockImplementation(() => undefined);
       vi.spyOn(console, "warn").mockImplementation(() => undefined);
       localStorage.clear();
-      localStorage.setItem("access_token", "fake-token");
+      localStorage.setItem("access_token", "eyJhbGciOiJIUzI1NiJ9.e30.test-signature");
       installMockApiSuccess();
     });
 
