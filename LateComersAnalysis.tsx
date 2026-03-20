@@ -224,3 +224,236 @@ export default function LatecomersAnalysisPage() {
       },
     ],
   };
+
+    /* ---------------- BAR ---------------- */
+  const lateByDeptData = {
+    labels: deptData.map((d) => d.department_name),
+    datasets: [
+      {
+        data: deptData.map((d) => d.rate),
+        backgroundColor: chartColors.barDept.slice(0, deptData.length).map((c) => dark ? c.dark : c.light),
+        borderRadius: 10,
+        barThickness: 22,
+      },
+    ],
+  };
+
+  const AXIS_COLOR = getAxisColor(dark);
+  const GRID_COLOR = getGridColor(dark);
+
+  const barOptions: ChartOptions<"bar"> = {
+    indexAxis: "y",
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: {
+        ticks: {
+          color: AXIS_COLOR,
+          callback: (v) => `${v}%`,
+        },
+        grid: { color: GRID_COLOR, display: false },
+      },
+      y: {
+        ticks: {
+          color: AXIS_COLOR,
+        },
+        grid: { display: false },
+      },
+    },
+  };
+
+  return (
+    <div className="space-y-6 p-6">
+      {errorMessage ? (
+        <Card className="border-red-200 bg-red-50/40 dark:border-red-900/40 dark:bg-red-900/10">
+          <CardContent className="py-3 text-sm text-red-700 dark:text-red-300">{errorMessage}</CardContent>
+        </Card>
+      ) : null}
+
+      {/* Header */}
+      <div className="flex justify-between items-center flex-wrap gap-4">
+        <h1 className="text-2xl font-extrabold">Latecomers Analysis</h1>
+        <div className="flex gap-3 items-center">
+          <FilterControls
+            start={startDate}
+            end={endDate}
+            setStart={setStartDate}
+            setEnd={setEndDate}
+            department={department}
+            setDepartment={setDepartment}
+            locationFilter={locationFilter}
+            setLocationFilter={setLocationFilter}
+          />
+        </div>
+      </div>
+
+      {/* KPI CARDS */}
+      <div className="grid gap-4 md:grid-cols-4">
+        {kpis.map((k) => (
+          <KpiCard 
+            key={k.label}
+            label={k.label}
+            value={k.value.toString()}
+            colorScheme={k.colorScheme}
+            isDark={dark}
+            Icon={k.icon}
+          />
+        ))}
+      </div>
+
+      {/* 7 DAY TREND */}
+      <Card>
+        <CardHeader>
+          <CardTitle>7-Day Late Arrival Trends</CardTitle>
+          <p className="text-xs text-muted-foreground">Track late arrivals across the week</p>
+        </CardHeader>
+        <CardContent className="grid grid-cols-7 gap-3">
+          {weekLate.map((d, idx) => (
+            <div 
+              key={d.day}
+              className={cn(
+                "rounded-xl border p-4 text-center transition-all hover:shadow-md",
+                dark 
+                  ? "border-border/50 bg-muted/40 hover:bg-muted/60" 
+                  : "border-border/30 bg-muted/30 hover:bg-muted/50"
+              )}
+            >
+              <div className={cn(
+                "text-xs font-semibold",
+                dark ? "text-muted-foreground" : "text-muted-foreground"
+              )}>
+                {d.day}
+              </div>
+              <div className={cn(
+                "mt-1 text-lg font-bold",
+                dark ? "text-foreground" : "text-foreground"
+              )}>
+                {d.value}
+              </div>
+              <div className="text-[10px] text-muted-foreground">late arrivals</div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* PIE + BAR */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Late Arrival Percentage (Department Wise)</CardTitle>
+          </CardHeader>
+          <CardContent className="relative flex items-center gap-6 min-h-[240px]">
+            <div className="h-[220px] w-[220px]">
+              <Doughnut data={donutData} />
+            </div>
+            <div className="space-y-2 text-sm">
+              {donutData.labels.map((l, i) => (
+                <div key={l} className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: donutData.datasets[0].backgroundColor[i] as string }} />
+                  <span className="flex-1">{l}</span>
+                  <span>{donutData.datasets[0].data[i]}%</span>
+                </div>
+              ))}
+            </div>
+            <div className="absolute right-4 bottom-4">
+              <Button
+                variant="outline"
+                className="rounded-xl"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`${API_BASE}/report`);
+                    if (!res.ok) throw new Error(`Report fetch failed: ${res.status}`);
+                    const blob = await res.blob();
+                    const cd = res.headers.get("content-disposition") || "";
+                    const match = cd.match(/filename=([^;]+)/);
+                    const filename = match ? match[1].replace(/\"/g, "") : "late_arrival_department_report.pdf";
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                  } catch (err) {
+                    // eslint-disable-next-line no-console
+                    console.error('Download error:', err);
+                  }
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download Report
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Late % by Department</CardTitle>
+            <p className="text-xs text-muted-foreground">Departments ranked by late arrival</p>
+          </CardHeader>
+          <CardContent className="h-[260px]">
+            <Bar data={lateByDeptData} options={barOptions} />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* TABLE */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Detailed Department Breakdown</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className={cn(
+            "overflow-x-auto rounded-2xl border border-border",
+            dark ? "bg-muted/10" : "bg-muted/5"
+          )}>
+            <table className="w-full text-sm">
+              <thead className={cn(
+                "text-xs font-semibold sticky top-0",
+                dark 
+                  ? "bg-muted/30 text-muted-foreground border-b border-border" 
+                  : "bg-muted/40 text-muted-foreground border-b border-border"
+              )}>
+                <tr>
+                  <th className="px-4 py-3 text-left">Department</th>
+                  <th className="px-4 py-3 text-center">Total Staff</th>
+                  <th className="px-4 py-3 text-center">Late Count</th>
+                  <th className="px-4 py-3 text-center">Late %</th>
+                  <th className="px-4 py-3 text-center">Avg Minutes Late</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deptData.map((r) => (
+                  <tr 
+                    key={r.department_name} 
+                    className={cn(
+                      "border-t border-border transition-colors hover:bg-muted/50",
+                      dark ? "hover:bg-muted/40" : "hover:bg-muted/20"
+                    )}
+                  >
+                    <td className="px-4 py-3 font-medium">{r.department_name}</td>
+                    <td className="px-4 py-3 text-center text-muted-foreground">{r.total_staff}</td>
+                    <td className="px-4 py-3 text-center font-semibold">{r.late_count}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={cn(
+                        "inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-bold",
+                        dark
+                          ? "bg-orange-500/20 text-orange-300"
+                          : "bg-orange-100 text-orange-700"
+                      )}>
+                        {r.rate}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center text-muted-foreground">{r.avg_minutes} min</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
