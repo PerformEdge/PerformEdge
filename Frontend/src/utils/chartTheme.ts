@@ -4,29 +4,35 @@ export type ChartTheme = "light" | "dark";
 
 export function applyChartTheme(theme: ChartTheme) {
   const isDark = theme === "dark";
+  const defaults = ChartJS.defaults as any;
+
+  defaults.plugins ??= {};
+  defaults.plugins.legend ??= {};
+  defaults.plugins.legend.labels ??= {};
+  defaults.plugins.tooltip ??= {};
 
   ChartJS.defaults.color = isDark ? "#E5E7EB" : "#374151";
   ChartJS.defaults.borderColor = isDark ? "#374151" : "#E5E7EB";
 
-  ChartJS.defaults.plugins.legend.labels.color = isDark
+  defaults.plugins.legend.labels.color = isDark
     ? "#E5E7EB"
     : "#374151";
 
-  ChartJS.defaults.plugins.tooltip.backgroundColor = isDark
+  defaults.plugins.tooltip.backgroundColor = isDark
     ? "#020617"
     : "#FFFFFF";
 
-  ChartJS.defaults.plugins.tooltip.titleColor = isDark
+  defaults.plugins.tooltip.titleColor = isDark
     ? "#F9FAFB"
     : "#111827";
 
-  ChartJS.defaults.plugins.tooltip.bodyColor = isDark
+  defaults.plugins.tooltip.bodyColor = isDark
     ? "#E5E7EB"
     : "#374151";
 
-  ChartJS.defaults.plugins.tooltip.borderColor = isDark
+  defaults.plugins.tooltip.borderColor = isDark
     ? "#1F2937"
     : "#E5E7EB";
 
-  ChartJS.defaults.plugins.tooltip.borderWidth = 1;
+  defaults.plugins.tooltip.borderWidth = 1;
 }
