@@ -457,3 +457,50 @@ export default function LatecomersAnalysisPage() {
     </div>
   );
 }
+
+/* ---------------- SMALL COMPONENTS ---------------- */
+function KpiCard({ 
+  label, 
+  value, 
+  colorScheme,
+  isDark,
+  Icon,
+}: { 
+  label: string; 
+  value: string;
+  colorScheme: { light: { bg: string; text: string; label: string }; dark: { bg: string; text: string; label: string } };
+  isDark: boolean;
+  Icon?: React.ComponentType<{ className?: string }>;
+}) {
+  const colors = isDark ? colorScheme.dark : colorScheme.light;
+  return (
+    <div 
+      className="rounded-2xl p-5 border border-border shadow-sm transition-all hover:shadow-md"
+      style={{ backgroundColor: colors.bg }}
+    >
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="text-xs font-semibold" style={{ color: colors.label }}>{label}</div>
+          <div className="mt-2 text-2xl font-extrabold tracking-tight" style={{ color: colors.text }}>{value}</div>
+        </div>
+        {Icon && (
+          <span style={{ color: colors.label, opacity: 0.4 }}>
+            <Icon className="h-5 w-5" />
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Filter({ label }: { label: string }) {
+  return (
+    <button className={cn(
+      "flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold",
+      "bg-background hover:bg-muted transition-colors"
+    )}>
+      {label}
+      <ChevronDown className="h-4 w-4" />
+    </button>
+  );
+}
