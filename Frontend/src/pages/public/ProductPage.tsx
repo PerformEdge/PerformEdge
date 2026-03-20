@@ -373,7 +373,7 @@ function Hero() {
               <p className="mt-5 max-w-xl text-balance text-base text-muted-foreground sm:text-lg">
                 PerformEdge is a centralized HR analytics dashboard built to fix fragmented HR data.
                 It consolidates employee information, attendance records, performance metrics and key HR KPIs
-                into a single interactive view — so management gets clear, real-time visibility.
+                into a single interactive view so management gets clear, real-time visibility.
               </p>
             </Reveal>
 
@@ -457,8 +457,8 @@ function WhoItsFor() {
         <SectionHeader
           eyebrow="Built for HR decision-makers"
           icon={Users}
-          title="Know what’s happening in your workforce — instantly"
-          description="PerformEdge brings employee information, attendance, and performance KPIs into a single dashboard so teams don’t waste time chasing data."
+          title="Know what’s happening in your workforce instantly"
+          description="PerformEdge brings employee information, attendance and performance KPIs into a single dashboard so teams don’t waste time chasing data."
         />
 
         <div className="mt-12 grid gap-6 md:grid-cols-3">
@@ -491,7 +491,7 @@ function Solution() {
           eyebrow="The core idea"
           icon={Layers}
           title="One source of truth for HR performance"
-          description="PerformEdge consolidates fragmented HR data into a single interactive dashboard. It focuses on practical analytics and usability instead of complex automation — making it reliable and easy to extend."
+          description="PerformEdge consolidates fragmented HR data into a single interactive dashboard. It focuses on practical analytics and usability instead of complex automation making it reliable and easy to extend."
         />
 
         <div className="mt-12 grid gap-6 lg:grid-cols-3">
@@ -500,7 +500,7 @@ function Solution() {
               <CardHeader>
                 <CardTitle>Data Consolidation</CardTitle>
                 <CardDescription>
-                  Employee info (EIM), attendance records, performance metrics and appraisals — unified.
+                  Employee info (EIM), attendance records, performance metrics and appraisals unified.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -533,7 +533,7 @@ function Solution() {
               <CardHeader>
                 <CardTitle>Fast Decisions</CardTitle>
                 <CardDescription>
-                  Clean charts and summary cards highlight trends quickly — helping management act confidently.
+                  Clean charts and summary cards highlight trends quickly helping management act confidently.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -600,7 +600,7 @@ function Features() {
           eyebrow="Key product features"
           icon={Sparkles}
           title="Everything you need for an HR analytics MVP"
-          description="Designed for practical reporting — centralized, readable, and fast."
+          description="Designed for practical reporting centralized, readable, and fast."
         />
 
         <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -627,7 +627,7 @@ function Features() {
               <CardHeader>
                 <CardTitle>Dashboard Overview</CardTitle>
                 <CardDescription>
-                  KPI summary cards, charts & graphs, filters and date range controls — all in one view.
+                  KPI summary cards, charts & graphs, filters and date range controls all in one view.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -839,7 +839,7 @@ function Learn() {
           eyebrow="How it works"
           icon={Gauge}
           title="Practical workflow, no complexity"
-          description="PerformEdge is built as a strong MVP. It focuses on clean reporting and reliability — so it’s easy to trust and easy to extend." 
+          description="PerformEdge is built as a strong MVP. It focuses on clean reporting and reliability so it’s easy to trust and easy to extend." 
         />
 
         <div className="mt-12 grid gap-6 lg:grid-cols-3">
@@ -983,7 +983,7 @@ const TEAM = [
     image: "/assets/team/achira.jpeg",
     github: "https://github.com/achirav",
     linkedin: "2",
-    details: "Contributed to the database layer, date utility functions, and shared backend infrastructure and contributed to both frontend and backend.."
+    details: "Contributed to the database layer, date utility functions and shared backend infrastructure and contributed to both frontend and backend.."
   },
   { 
     name: "Disadhi Ranasinghe", 
@@ -1354,11 +1354,6 @@ function Footer() {
 
         <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <div>©️ {new Date().getFullYear()} PerformEdge. All rights reserved.</div>
-
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-2 w-2 rounded-full bg-primary" />
-            Built as a practical analytics MVP
-          </div>
         </div>
       </div>
     </footer>
