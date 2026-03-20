@@ -225,7 +225,7 @@ export default function LatecomersAnalysisPage() {
     ],
   };
 
-    /* ---------------- BAR ---------------- */
+  /* ---------------- BAR ---------------- */
   const lateByDeptData = {
     labels: deptData.map((d) => d.department_name),
     datasets: [
