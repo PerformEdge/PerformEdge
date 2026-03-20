@@ -31,7 +31,6 @@ export default function FilterControls({
   const [openDept, setOpenDept] = useState(false);
   const [openLoc, setOpenLoc] = useState(false);
 
-  // show placeholders until user interacts
   const [touchedDate, setTouchedDate] = useState(false);
   const [touchedDept, setTouchedDept] = useState(false);
   const [touchedLoc, setTouchedLoc] = useState(false);
@@ -47,7 +46,6 @@ export default function FilterControls({
     setTouchedDate(false);
   };
 
-  // open date - close others
   const handleOpenDate = () => {
     setOpenDate((s) => !s);
     setTouchedDate(true);
@@ -57,7 +55,6 @@ export default function FilterControls({
     }
   };
 
-  // open dept - close others
   const handleOpenDept = () => {
     setOpenDept((s) => !s);
     if (!openDept) {
@@ -66,7 +63,6 @@ export default function FilterControls({
     }
   };
 
-  // open loc - close others
   const handleOpenLoc = () => {
     setOpenLoc((s) => !s);
     if (!openLoc) {

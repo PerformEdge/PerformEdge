@@ -1,12 +1,8 @@
 import React from "react";
 
-//  1) <FormAlert message={"..."} variant="error" />
-//  2) <FormAlert variant="error">...</FormAlert>
-
 type FormAlertVariant = "error" | "success" | "info";
 
 type FormAlertProps = React.PropsWithChildren<{
-  /** Preferred usage */
   message?: string;
   variant?: FormAlertVariant;
   className?: string;
@@ -40,5 +36,4 @@ export function FormAlert({
   );
 }
 
-// Keep default export for convenience.
 export default FormAlert;
