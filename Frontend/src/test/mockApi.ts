@@ -48,7 +48,7 @@ export function responseForUrl(url: string) {
 
   if (normalized.includes("/auth/login")) {
     return {
-      access_token: "fake-token",
+      access_token: "eyJhbGciOiJIUzI1NiJ9.e30.test-signature",
       token_type: "bearer",
       role: "manager",
       roles: ["MANAGER"],
@@ -439,7 +439,7 @@ function makeResponse(payload: any, ok = true, status = 200): ResponseShape {
 }
 
 export function installMockApiSuccess() {
-  global.fetch = vi.fn(async (input: any) => makeResponse(responseForUrl(String(input))));
+  global.fetch = vi.fn(async (input: any) => makeResponse(responseForUrl(String(input)))) as unknown as typeof fetch;
   mockedAxios.get = vi.fn(async (url: string) => ({ data: responseForUrl(String(url)) }));
   mockedAxios.post = vi.fn(async (url: string) => ({ data: responseForUrl(String(url)) }));
   mockedAxios.put = vi.fn(async (url: string) => ({ data: responseForUrl(String(url)) }));
@@ -450,7 +450,7 @@ export function installMockApiSuccess() {
 export function installMockApiFailure() {
   global.fetch = vi.fn(async () => {
     throw new Error("Network error");
-  });
+  }) as unknown as typeof fetch;
   mockedAxios.get = vi.fn(async () => {
     throw new Error("Network error");
   });
