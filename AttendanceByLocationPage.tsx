@@ -430,3 +430,83 @@ export default function AttendanceByLocationPage() {
     </div>
   );
 }
+
+// ---------------- Components ----------------
+
+// theme-aware KpiCard with tone
+function KpiCard({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  const dark = isDarkMode();
+  const scheme = tone && (kpiSchemes as any)[tone] ? (kpiSchemes as any)[tone] : kpiSchemes.mint;
+  const colors = dark ? scheme.dark : scheme.light;
+  return (
+    <div className="rounded-2xl p-5 border border-border shadow-sm transition-all hover:shadow-md" style={{ backgroundColor: colors.bg }}>
+      <div className="text-xs font-semibold" style={{ color: colors.text }}>{label}</div>
+      <div className="mt-2 text-2xl font-extrabold" style={{ color: colors.text }}>{value}</div>
+    </div>
+  );
+}
+
+function LocationCard({ name, present, absent }: { name: string; present: number; absent: number }) {
+  const dark = isDarkMode();
+  return (
+    <div className={cn(
+      "rounded-2xl border border-border shadow-sm p-4 transition-colors",
+      dark ? "bg-muted/30" : "bg-white"
+    )}>
+      <div className="flex items-stretch gap-3">
+        <div className="w-1.5 rounded-full bg-red-500 dark:bg-red-600" />
+        <div className="flex-1">
+          <div className={cn("text-center text-sm font-semibold", dark ? "text-foreground" : "text-foreground")}>{name}</div>
+          <div className="mt-2 flex items-center justify-center gap-4 text-xs">
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">👤 Present {present}</span>
+            <span className="font-semibold text-red-600 dark:text-red-400">Absent {absent}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PresentAbsentRow({ name, present, absent }: { name: string; present: number; absent: number }) {
+  const total = Math.max(0, present + absent);
+  const presentPct = total > 0 ? (present / total) * 100 : 0;
+  const absentPct = total > 0 ? 100 - presentPct : 0;
+  const dark = isDarkMode();
+
+  // UX: don't place labels inside a 0%-width segment (it gets clipped).
+  // Instead, show the counts above the bar and keep the bar purely visual.
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm font-semibold text-muted-foreground">{name}</div>
+        <div className="flex items-center gap-4 text-xs">
+          <span className="font-semibold text-emerald-600 dark:text-emerald-400">Present {present}</span>
+          <span className="font-semibold text-red-600 dark:text-red-400">Absent {absent}</span>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-border bg-muted/20">
+        <div className="flex h-3 w-full">
+          <div style={{ width: `${presentPct}%`, background: locationBarColors(dark).present }} />
+          <div style={{ width: `${absentPct}%`, background: locationBarColors(dark).absent }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FilterPill({ label }: { label: string }) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2",
+        "text-sm font-semibold text-foreground shadow-sm hover:bg-muted transition"
+      )}
+    >
+      {label}
+      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+    </button>
+  );
+}
+
