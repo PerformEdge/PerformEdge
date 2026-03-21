@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <title>PerformEdge – HR Analytics &amp; Workforce Intelligence Dashboard</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet" />
+    <meta
+      name="description"
+      content="PerformEdge is a centralized HR analytics dashboard that consolidates employee information, attendance records, performance metrics and key HR KPIs into a single interactive dashboard."
+    />
+    <meta name="author" content="PerformEdge Team" />
+
+    <meta property="og:title" content="PerformEdge – HR Analytics &amp; Workforce Intelligence Dashboard" />
+    <meta
+      property="og:description"
+      content="Centralized HR analytics dashboard for employee, attendance and performance insights."
+    />
+    <meta property="og:type" content="website" />
+
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem("theme");
+          var theme = saved || "dark"; 
+          if (theme === "dark") document.documentElement.classList.add("dark");
+        } catch (e) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

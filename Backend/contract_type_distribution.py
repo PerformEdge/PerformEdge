@@ -1,0 +1,270 @@
+from datetime import date
+from fastapi import APIRouter, Query, Header, HTTPException
+from typing import Optional, List, Dict
+from database import get_database_connection
+from security import verify_token
+from fastapi.responses import StreamingResponse
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+import io
+from date_utils import resolve_date_range, active_during_range_sql
+
+router = APIRouter(prefix="/eim", tags=["EIM"])
+
+
+#  COMPANY FROM TOKEN
+
+def _get_company_id(authorization: Optional[str]) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid token format")
+
+    payload = verify_token(parts[1])
+    company_id = payload.get("company_id")
+
+    if not company_id:
+        raise HTTPException(status_code=403, detail="Company ID missing in token")
+
+    return company_id
+
+
+
+#  MAIN ENDPOINT
+@router.get("/contract-type-distribution")
+def contract_type_distribution(
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+    authorization: Optional[str] = Header(None),
+):
+
+    company_id = _get_company_id(authorization)
+
+    filters = []
+    params: List = [company_id]
+
+    #  DEPARTMENT FILTER 
+    if department:
+        filters.append("e.department_id = %s")
+        params.append(department)
+
+    #  LOCATION FILTER 
+    if location:
+        filters.append("e.location_id = %s")
+        params.append(location)
+
+    #  DATE FILTER (active during selected period) 
+    if date_range:
+        start_date, end_date = resolve_date_range(date_range=date_range)
+        active_clause, active_params = active_during_range_sql(
+            alias="e",
+            start_date=start_date,
+            end_date=end_date,
+        )
+        filters.append(active_clause.replace(" AND ", "", 1).strip())
+        params.extend(active_params)
+
+    filter_sql = ""
+    if filters:
+        filter_sql = " AND " + " AND ".join(filters)
+
+    conn = get_database_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        #  TOTAL STAFF 
+        cursor.execute(f"""
+            SELECT COUNT(*) AS total
+            FROM employees e
+            WHERE e.company_id = %s
+              AND e.employement_status = 'ACTIVE'
+              {filter_sql}
+        """, params)
+
+        total_staff = cursor.fetchone()["total"] or 0
+
+        #  CONTRACT COUNTS 
+        cursor.execute(f"""
+            SELECT ec.contract_type, COUNT(*) AS count
+            FROM employment_contract ec
+            JOIN employees e ON e.employee_id = ec.employee_id
+            WHERE e.company_id = %s
+              AND e.employement_status = 'ACTIVE'
+              AND ec.is_current = 1
+              {filter_sql}
+            GROUP BY ec.contract_type
+        """, params)
+
+        rows = cursor.fetchall()
+
+        permanent = 0
+        consultants = 0
+        probation = 0
+
+        for row in rows:
+            ctype = (row["contract_type"] or "").lower()
+            count = row["count"]
+
+            if ctype == "full-time":
+                permanent = count
+            elif ctype == "consultant":
+                consultants = count
+            elif ctype == "probation":
+                probation = count
+
+        #  SUMMARY 
+        def percentage(value):
+            return round((value / total_staff) * 100, 0) if total_staff else 0
+
+        summary = [
+            {"type": "Permanent", "percentage": percentage(permanent)},
+            {"type": "Consultants", "percentage": percentage(consultants)},
+            {"type": "Probation", "percentage": percentage(probation)},
+        ]
+
+        #  EMPLOYEE TABLE 
+        cursor.execute(f"""
+            SELECT
+                e.full_name AS name,
+                d.department_name AS department,
+                ec.contract_type AS contract
+            FROM employees e
+            LEFT JOIN departments d ON d.department_id = e.department_id
+            LEFT JOIN employment_contract ec
+                ON ec.employee_id = e.employee_id
+                AND ec.is_current = 1
+            WHERE e.company_id = %s
+              AND e.employement_status = 'ACTIVE'
+              {filter_sql}
+        """, params)
+
+        employees = cursor.fetchall()
+
+        return {
+            "kpis": {
+                "total": total_staff,
+                "permanent": permanent,
+                "consultants": consultants,
+                "probation": probation
+            },
+            "summary": summary,
+            "employees": employees
+        }
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+#  PDF GENERATOR
+def _pdf_make(title: str, 
+    subtitle: str = "",filters: Dict[str, str] = None, lines: List[str] = None) -> io.BytesIO:
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    width, height = letter
+
+    x = 50
+    y = height - 60
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(x, y, title)
+    y -= 30
+
+    # ---- Subtitle ----
+    if subtitle:
+        c.setFont("Helvetica", 10)
+        c.drawString(x, y, subtitle)
+        y -= 18
+
+    # ---- Filters ----
+    if filters:
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(x, y, "Filters")
+        y -= 14
+
+        c.setFont("Helvetica", 10)
+        for k, v in filters.items():
+            if y < 70:
+                c.showPage()
+                y = height - 60
+                c.setFont("Helvetica", 10)
+
+            c.drawString(x, y, f"{k}: {v}")
+            y -= 13
+
+        y -= 6
+
+    c.setFont("Helvetica", 10)
+
+    for line in lines:
+        if y < 70:
+            c.showPage()
+            y = height - 60
+            c.setFont("Helvetica", 10)
+
+        c.drawString(x, y, str(line))
+        y -= 15
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+def _pdf_response(filename: str, buf: io.BytesIO):
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+#  REPORT ENDPOINT
+@router.get("/contract-type-distribution/report")
+def contract_type_distribution_report(
+    authorization: Optional[str] = Header(None),
+    date_range: str = Query("", alias="dateRange"),
+    department: str = Query("", alias="department"),
+    location: str = Query("", alias="location"),
+):
+
+    data = contract_type_distribution(
+        date_range=date_range,
+        department=department,
+        location=location,
+        authorization=authorization
+    )
+    
+    filters = {
+        "Date Range": date_range or "All Time",
+        "Department": department or "All Departments",
+        "Location": location or "All Locations"
+    }
+
+    lines = [
+        f"Total Staff: {data['kpis']['total']}",
+        f"Permanent: {data['kpis']['permanent']}",
+        f"Consultants: {data['kpis']['consultants']}",
+        f"Probation: {data['kpis']['probation']}",
+        "",
+        "Distribution:",
+    ]
+
+    for item in data["summary"]:
+        lines.append(f"- {item['type']}: {item['percentage']}% ")
+    
+    lines.extend(["", "Employee List (Name | Department | Contract Type)"])
+
+    
+    for emp in data["employees"]:
+        lines.append(f"{emp['name']} | {emp['department']} | {emp['contract']}")
+        
+        
+    buf = _pdf_make(title="Contract Type Distribution Report", 
+                    subtitle=f"Generated on {date.today().isoformat()}",
+                    filters=filters, 
+                    lines=lines)
+
+    return _pdf_response("contract_type_distribution_report.pdf", buf)
