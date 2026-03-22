@@ -39,6 +39,7 @@ def parse_date(date_str: str) -> date:
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid date format: {date_str}. Use YYYY-MM-DD")
 
+# date range filter by start date
 
 def resolve_date_range(
     date_range: Optional[str] = None,
@@ -98,6 +99,7 @@ def resolve_date_range(
     return start_date, end_date
 
 
+# date range filter by with end date
 def active_during_range_sql(
     *,
     alias: str,
