@@ -139,7 +139,7 @@ def location_wise_staff_distribution(
             min_location = sorted_data[0]["location"]
             max_location = sorted_data[-1]["location"]
 
-        #Builds KPI cards showing key location-based staff distribution insights
+        #KPI cards value for location wise staff count
         return {
             "kpis": {
                 "max_location": max_location,
