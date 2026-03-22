@@ -53,7 +53,7 @@ def _resolve_company_id(
     # No company → reject
     raise HTTPException(status_code=401, detail="Company not resolved")
 
-
+# date location and department filter
 def _get_gender_analysis_data(
     resolved_company_id: str,
     date_range: str = "",
