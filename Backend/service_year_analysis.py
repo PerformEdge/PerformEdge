@@ -32,6 +32,7 @@ def _get_company_id(authorization: Optional[str]) -> str:
 
 
 #  BUSINESS LOGIC (REUSABLE FUNCTION)
+# Apply date range filter to return records only within the selected period
 
 def _get_service_year_data(
     company_id: str,
@@ -238,6 +239,7 @@ def _pdf_make(
     return buf
 
 #  REPORT ENDPOINT
+# Generate the report using the filtered employee data
 
 @router.get("/service-year-analysis/report")
 def service_year_analysis_report(
