@@ -9,7 +9,7 @@ import { toast } from "@/components/ui/sonner";
 import { FormAlert } from "@/components/FormAlert";
 import { normalizeEmail, sanitizeInput, setAuthSession } from "@/lib/security";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "https://performedge.onrender.com";
 
 type LoginRole = "employee" | "manager";
 
