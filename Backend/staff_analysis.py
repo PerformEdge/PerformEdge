@@ -54,6 +54,7 @@ def staff_analysis(
     end_dt = None
 
     #  DATE FILTER 
+    #filtering date and etc 
     if date_range:
         try:
             start_dt, end_dt = resolve_date_range(date_range=date_range)
@@ -256,6 +257,7 @@ def _pdf_response(filename: str, buf: io.BytesIO):
 
 
 #  REPORT DOWNLOAD ENDPOINT
+# Downloads the filtered staff analysis report for offline viewing or sharing
 
 @router.get("/staff-analysis/report")
 def staff_analysis_report(
