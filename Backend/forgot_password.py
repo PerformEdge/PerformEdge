@@ -13,7 +13,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 # FORGOT PASSWORD 
 class SendOtpRequest(BaseModel):
     email: EmailStr
-
+#otp part
 @router.post("/send-otp")
 def send_otp(data: SendOtpRequest):
 
@@ -42,7 +42,7 @@ class ChangePasswordRequest(BaseModel):
     email: EmailStr
     otp: str
     new_password: str
-
+#change pasword part
 @router.post("/change-password")
 def change_password(data: ChangePasswordRequest):
 
