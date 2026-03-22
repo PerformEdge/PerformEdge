@@ -63,7 +63,7 @@ export default function ContractTypeDistribution() {
   const [downloading, setDownloading] = useState(false);
 
   /* ---------------- FETCH DATA ---------------- */
-Fetches contract type distribution data again whenever the selected filters change.
+//Fetches contract type distribution data again whenever the selected filters change.
  useEffect(() => {
     const fetchData = async () => {
       try {
