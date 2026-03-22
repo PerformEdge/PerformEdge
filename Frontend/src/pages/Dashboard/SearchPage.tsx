@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "https://performedge.onrender.com";
 
 type EmployeeResult = {
   employee_id: string;

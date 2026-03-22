@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import PerformanceFilters from "@/components/PerformanceFilters";
 import { toast } from "@/components/ui/sonner";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "https://performedge.onrender.com";
 
 type TrainingBar = { name: string; value: number; color: string };
 

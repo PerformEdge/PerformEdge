@@ -8,7 +8,7 @@ import "@/utils/chartSetup";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-const API_BASE = "http://localhost:8000";
+const API_BASE = "https://performedge.onrender.com";
 
 /* ================= THEME HELPERS ================= */
 function isDarkMode() {

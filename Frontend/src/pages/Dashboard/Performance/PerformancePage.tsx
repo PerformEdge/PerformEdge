@@ -11,7 +11,7 @@ import { toast } from "@/components/ui/sonner";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "https://performedge.onrender.com";
 
 function getAuthHeaders(): HeadersInit {
   const token = localStorage.getItem("access_token");

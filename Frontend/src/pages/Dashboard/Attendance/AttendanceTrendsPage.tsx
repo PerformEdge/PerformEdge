@@ -65,7 +65,7 @@ const getAxisColor = (isDark: boolean) => isDark ? "#F8FAFC" : "#475569";
 const getGridColor = (isDark: boolean) => isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)";
 
 export default function AttendanceTrendsPage() {
-  const API_BASE = "http://localhost:8000";
+  const API_BASE = "https://performedge.onrender.com";
   const [kpis, setKpis] = useState({ employees: 0, absenteeRate: 0, highestDay: "", topDept: "" });
   const [last5Days, setLast5Days] = useState<{ day: string; absent: number }[]>([]);
   const [avgByDept, setAvgByDept] = useState<{ dept: string; rate: number }[]>([]);

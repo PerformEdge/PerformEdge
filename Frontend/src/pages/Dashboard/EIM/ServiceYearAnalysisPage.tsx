@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 
 /* ---------------- API BASE ---------------- */
-const API_BASE = "http://localhost:8000";
+const API_BASE = "https://performedge.onrender.com";
 
 /* ---------------- TYPES ---------------- */
 interface ApiResponse {

@@ -25,7 +25,7 @@ interface ApiResponse {
 }
 
 /* ---------------- API BASE ---------------- */
-const API_BASE = "http://localhost:8000";
+const API_BASE = "https://performedge.onrender.com";
 
 /* ---------------- AUTH HEADER ---------------- */
 function getAuthHeaders(): HeadersInit {
