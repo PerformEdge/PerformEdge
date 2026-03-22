@@ -12,7 +12,7 @@ from date_utils import resolve_date_range, active_during_range_sql
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
-
+# session expired methods
 #  COMPANY RESOLUTION 
 def _company_id_from_token(authorization: Optional[str]) -> Optional[str]:
     if not authorization:
