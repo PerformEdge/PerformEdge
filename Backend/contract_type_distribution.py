@@ -46,6 +46,7 @@ def contract_type_distribution(
     filters = []
     params: List = [company_id]
 
+    # Fetches contract type distribution data again whenever the selected filters change.
     #  DEPARTMENT FILTER 
     if department:
         filters.append("e.department_id = %s")
@@ -222,6 +223,7 @@ def _pdf_response(filename: str, buf: io.BytesIO):
 
 
 #  REPORT ENDPOINT
+# Downloads the filtered contract type distribution report as a PDF file.
 @router.get("/contract-type-distribution/report")
 def contract_type_distribution_report(
     authorization: Optional[str] = Header(None),
