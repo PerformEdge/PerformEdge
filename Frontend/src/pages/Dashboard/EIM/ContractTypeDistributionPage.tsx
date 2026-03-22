@@ -38,6 +38,7 @@ interface ApiResponse {
 }
 
 /* ---------------- AUTH HEADER ---------------- */
+// Builds the request headers and attaches the saved access token for authenticated API calls.
 function getAuthHeaders(): HeadersInit {
   const token =
     localStorage.getItem("access_token") || "";
@@ -62,7 +63,7 @@ export default function ContractTypeDistribution() {
   const [downloading, setDownloading] = useState(false);
 
   /* ---------------- FETCH DATA ---------------- */
-
+Fetches contract type distribution data again whenever the selected filters change.
  useEffect(() => {
     const fetchData = async () => {
       try {
