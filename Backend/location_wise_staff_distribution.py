@@ -139,6 +139,7 @@ def location_wise_staff_distribution(
             min_location = sorted_data[0]["location"]
             max_location = sorted_data[-1]["location"]
 
+        #Builds KPI cards showing key location-based staff distribution insights
         return {
             "kpis": {
                 "max_location": max_location,
@@ -225,6 +226,7 @@ def _pdf_response(filename: str, buf: io.BytesIO) -> StreamingResponse:
 
 
 #  REPORT ENDPOINT
+#Generates and downloads the location-wise staff distribution report as a PDF
 @router.get("/location-wise-staff/report")
 def location_wise_staff_report(
     date_range: str = Query("", alias="dateRange"),
