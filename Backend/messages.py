@@ -9,6 +9,7 @@ from pydantic import BaseModel, EmailStr
 
 from database import get_db_connection
 from security import verify_token
+from psycopg2.extras import RealDictCursor
 
 router = APIRouter(prefix="/messages", tags=["Messages"])
 
@@ -16,7 +17,7 @@ router = APIRouter(prefix="/messages", tags=["Messages"])
 def _fetch_all(sql: str, params: Tuple[Any, ...] = ()) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     try:
-        cur = conn.cursor(dictionary=True)
+        cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute(sql, params)
         return cur.fetchall()
     finally:
