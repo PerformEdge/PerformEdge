@@ -8,7 +8,7 @@ from pydantic import BaseModel, EmailStr
 
 from database import get_database_connection
 from security import create_access_token
-
+from psycopg2.extras import RealDictCursor
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
@@ -23,7 +23,7 @@ class LoginRequest(BaseModel):
 @router.post("/login")
 def login(data: LoginRequest):
     conn = get_database_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
     try:
         cursor.execute(
