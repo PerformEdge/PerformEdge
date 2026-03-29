@@ -729,7 +729,10 @@ def training_needs(
     if loc_id:
         table_sql += " AND e.location_id=%s"
         tparams.append(loc_id)
-    table_sql += " GROUP BY e.employee_id, tc.category_id ORDER BY e.full_name ASC"
+    table_sql += (
+        " GROUP BY e.employee_id, e.full_name, d.department_name, tc.category_id, tc.category_name"
+        " ORDER BY e.full_name ASC"
+    )
     trows = _fetch_all(table_sql, tuple(tparams))
 
     def norm_cat(name: str) -> str:

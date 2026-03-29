@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from functools import lru_cache
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -14,13 +13,49 @@ from security import verify_token
 router = APIRouter(prefix="/messages", tags=["Messages"])
 
 
-@lru_cache(maxsize=16)
 def _column_is_boolean(table_name: str, column_name: str) -> bool:
+    """
+    Decide whether a flag column is stored as a real boolean or as 0/1.
+
+    Render uses PostgreSQL, while the original project was written for MySQL.
+    PostgreSQL returns Python bool values for boolean columns; MySQL commonly
+    stores these flags as tinyint(1), which come back as ints.
+
+    We intentionally avoid caching here. A failed first lookup would otherwise
+    cache a wrong answer and keep causing `boolean = integer` errors for the
+    lifetime of the process.
+    """
     conn = None
     cur = None
     try:
         conn = get_db_connection()
-        cur = conn.cursor(dictionary=True)
+
+        # First, inspect a real value if one exists.
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT {column_name} FROM {table_name} WHERE {column_name} IS NOT NULL LIMIT 1"
+        )
+        sample = cur.fetchone()
+        if sample is not None:
+            if isinstance(sample, dict):
+                value = sample.get(column_name)
+                if value is None and sample:
+                    value = next(iter(sample.values()))
+            else:
+                value = sample[0] if isinstance(sample, (list, tuple)) and sample else sample
+
+            if isinstance(value, bool):
+                return True
+            if isinstance(value, int) and not isinstance(value, bool):
+                return False
+
+        try:
+            cur.close()
+        except Exception:
+            pass
+
+        # Fallback to metadata lookup.
+        cur = conn.cursor()
         cur.execute(
             """
             SELECT data_type
@@ -30,8 +65,15 @@ def _column_is_boolean(table_name: str, column_name: str) -> bool:
             """,
             (table_name, column_name),
         )
-        row = cur.fetchone() or {}
-        data_type = row.get("data_type") if isinstance(row, dict) else None
+        row = cur.fetchone()
+        if not row:
+            return False
+
+        if isinstance(row, dict):
+            data_type = row.get("data_type")
+        else:
+            data_type = row[0] if isinstance(row, (list, tuple)) and row else row
+
         return str(data_type or "").lower() == "boolean"
     except Exception:
         return False
@@ -42,7 +84,8 @@ def _column_is_boolean(table_name: str, column_name: str) -> bool:
         except Exception:
             pass
         try:
-            conn.close()
+            if conn is not None:
+                conn.close()
         except Exception:
             pass
 
