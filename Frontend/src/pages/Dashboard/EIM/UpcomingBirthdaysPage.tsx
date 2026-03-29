@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import PerformanceFilters from "@/components/PerformanceFilters";
+import { apiUrl } from "@/lib/api";
 
 /* ================= TYPES ================= */
 interface Birthday {
@@ -24,8 +25,8 @@ interface ApiResponse {
 }
 
 /* ================= API URL ================= */
-const API_URL = "http://localhost:8000/eim/upcoming-birthdays";
-const REPORT_URL = "http://localhost:8000/eim/upcoming-birthdays/report";
+const API_URL = apiUrl("/eim/upcoming-birthdays");
+const REPORT_URL = apiUrl("/eim/upcoming-birthdays/report");
 
 /* ================= COMPONENT ================= */
 function getAuthHeaders(): HeadersInit {
@@ -37,7 +38,6 @@ function getAuthHeaders(): HeadersInit {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
-
 
 export default function UpcomingBirthdays() {
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -89,8 +89,6 @@ export default function UpcomingBirthdays() {
 
   fetchData();
 }, [dateRange, department, location]);
-
-
 
   /* ================= DOWNLOAD PDF ================= */
     const onDownloadReport = async () => {

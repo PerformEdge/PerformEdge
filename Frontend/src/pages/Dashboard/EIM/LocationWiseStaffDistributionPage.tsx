@@ -6,14 +6,11 @@ import PerformanceFilters from "@/components/PerformanceFilters";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { API_BASE } from "@/lib/api";
 
 /* ---------------- API BASE URL ---------------- */
-const API_BASE = "https://performedge.onrender.com";
-
 
 /* ---------------- TYPES ---------------- */
-
-
 
 interface LocationChartItem {
   location: string;
@@ -51,8 +48,6 @@ function getAuthHeaders(): HeadersInit {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
-
-
 
 export default function LocationWiseStaffDistribution() {
   const isDark = document.documentElement.classList.contains("dark");
@@ -108,7 +103,6 @@ useEffect(() => {
 
   fetchData();
 }, [dateRange, department, location]);
-
 
   if (loading) return <div className="p-6">Loading...</div>;
   if (!data) return <div className="p-6 text-red-500">Failed to load location-wise staff data</div>;
@@ -318,7 +312,6 @@ const onDownloadReport = async () => {
 }
 
 /* ---------------- COMPONENTS ---------------- */
-
 
 function Kpi({ title, value }: { title: string; value: string }) {
   return (

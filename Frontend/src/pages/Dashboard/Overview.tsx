@@ -9,6 +9,7 @@ import "react-day-picker/dist/style.css";
 import "@/utils/chartSetup";
 import { applyChartTheme } from "../../utils/chartTheme";
 import { toast } from "@/components/ui/sonner";
+import { apiUrl } from "@/lib/api";
 
 /* ---------- TYPES ---------- */
 
@@ -44,7 +45,7 @@ interface DashboardResponse {
 
 /* ---------- API ---------- */
 
-const API_URL = "http://localhost:8000/dashboard/overview";
+const API_URL = apiUrl("/dashboard/overview");
 
 /* ---------- COMPONENT ---------- */
 

@@ -3,8 +3,7 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-
-const API_BASE = "https://performedge.onrender.com";
+import { API_BASE } from "@/lib/api";
 
 type Msg = {
   message_id: string;

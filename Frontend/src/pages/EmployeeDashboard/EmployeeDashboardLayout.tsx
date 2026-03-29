@@ -15,6 +15,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { API_BASE } from "@/lib/api";
 import {
   buildAuthHeaders,
   clearAuthSession,
@@ -22,8 +23,6 @@ import {
   getStoredRole,
   getStoredUser,
 } from "@/lib/security";
-
-const API_BASE = "http://127.0.0.1:8000";
 
 type SuggestionEmployee = {
   employee_id: string;
@@ -119,11 +118,11 @@ export default function EmployeeDashboardLayout() {
 
         if (nRes.ok) {
           const n = await nRes.json();
-          setUnreadNotif(Number(n?.unread || 0));
+          setUnreadNotif(Number(n?.count ?? n?.unread ?? 0));
         }
         if (mRes.ok) {
           const m = await mRes.json();
-          setUnreadMsgs(Number(m?.unread || 0));
+          setUnreadMsgs(Number(m?.count ?? m?.unread ?? 0));
         }
       } catch {
         // ignore

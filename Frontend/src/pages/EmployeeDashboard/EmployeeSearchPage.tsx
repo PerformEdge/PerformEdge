@@ -5,8 +5,7 @@ import { Loader2, Search } from "lucide-react";
 import FormAlert from "@/components/FormAlert";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "@/lib/api";
 
 type SearchEmployee = {
   employee_id: string;

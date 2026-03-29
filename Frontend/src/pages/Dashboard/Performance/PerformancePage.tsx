@@ -8,10 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import PerformanceFilters from "@/components/PerformanceFilters";
 import { toast } from "@/components/ui/sonner";
+import { API_BASE } from "@/lib/api";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
-
-const API_BASE = "https://performedge.onrender.com";
 
 function getAuthHeaders(): HeadersInit {
   const token = localStorage.getItem("access_token");

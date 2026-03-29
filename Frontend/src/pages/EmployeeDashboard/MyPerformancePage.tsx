@@ -7,8 +7,7 @@ import FormAlert from "@/components/FormAlert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Award, CalendarCheck2, Clock3, TrendingDown, TrendingUp } from "lucide-react";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "@/lib/api";
 
 type PerfHistoryRow = {
   review_id: string;

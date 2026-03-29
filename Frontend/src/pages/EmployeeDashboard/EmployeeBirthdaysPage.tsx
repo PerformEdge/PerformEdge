@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import FormAlert from "@/components/FormAlert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "@/lib/api";
 
 type BirthdayRow = {
   employee_id: string;

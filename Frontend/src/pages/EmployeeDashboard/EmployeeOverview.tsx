@@ -16,8 +16,7 @@ import "@/utils/chartSetup";
 import FormAlert from "@/components/FormAlert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "@/lib/api";
 
 type OverviewResponse = {
   employee: {

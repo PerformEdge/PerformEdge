@@ -8,8 +8,8 @@ import "@/utils/chartSetup";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-const API_BASE = "https://performedge.onrender.com";
-
+import FilterControls from "@/components/FilterControls";
+import { API_BASE, apiUrl } from "@/lib/api";
 /* ================= THEME HELPERS ================= */
 function isDarkMode() {
   if (typeof window === "undefined") return false;
@@ -31,7 +31,6 @@ const chartPalettes = {
   bar: ["#F5A623", "#4F46E5", "#EC4899", "#22C55E", "#34D399", "#8B5CF6"],
 };
 
-import FilterControls from "@/components/FilterControls";
 
 /* ================= PAGE ================= */
 export default function NoPayLeavePercentagePage() {
@@ -55,7 +54,7 @@ export default function NoPayLeavePercentagePage() {
   useEffect(() => {
     const initializeDateRange = async () => {
       try {
-        const res = await fetch("http://localhost:8000/attendance/latest-date?default_days=14");
+        const res = await fetch(apiUrl("/attendance/latest-date?default_days=14"));
         const data = await res.json();
         if (data?.start && data?.end) {
           setStart(data.start);

@@ -14,8 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/sonner";
 import { buildAuthHeaders, getAccessToken, getStoredRole, getStoredUser } from "@/lib/security";
-
-const API_BASE = "https://performedge.onrender.com";
+import { API_BASE } from "@/lib/api";
 
 function getAuthHeaders(): HeadersInit {
   return buildAuthHeaders({ "Content-Type": "application/json" });

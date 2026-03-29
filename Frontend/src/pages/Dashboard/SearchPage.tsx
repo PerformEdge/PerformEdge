@@ -3,8 +3,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-
-const API_BASE = "https://performedge.onrender.com";
+import { API_BASE } from "@/lib/api";
 
 type EmployeeResult = {
   employee_id: string;
@@ -67,7 +66,7 @@ export default function SearchPage() {
           const msg = e?.message || "Something went wrong";
           setError(
             msg === "Failed to fetch"
-              ? "Cannot connect to the backend API. Please start the backend (FastAPI) on http://localhost:8000."
+              ? `Cannot connect to the backend API at ${API_BASE}.`
               : msg,
           );
         }

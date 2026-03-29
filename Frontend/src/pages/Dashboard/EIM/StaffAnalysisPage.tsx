@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { Users, UserPlus, UserX, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const API_BASE = "https://performedge.onrender.com";
+import { API_BASE } from "@/lib/api";
 
 /* ================= TYPES ================= */
 
@@ -40,7 +39,6 @@ interface ApiResponse {
   }[];
 }
 
-
 /* ================= AUTH HEADER ================= */
 function getAuthHeaders(): HeadersInit {
   const token =
@@ -51,9 +49,6 @@ function getAuthHeaders(): HeadersInit {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
-
-
-
 
 /* ================= COMPONENT ================= */
 

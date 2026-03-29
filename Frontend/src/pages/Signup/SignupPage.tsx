@@ -4,8 +4,7 @@ import { ArrowLeft, Lock, Mail, User } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-
-const API_BASE = "https://performedge.onrender.com";
+import { API_BASE } from "@/lib/api";
 
 export default function SignupPage() {
   const [companyId, setCompanyId] = React.useState("");

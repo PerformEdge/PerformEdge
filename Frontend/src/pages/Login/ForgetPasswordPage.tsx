@@ -5,8 +5,7 @@ import { ArrowLeft, Lock, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormAlert } from "@/components/FormAlert";
-
-const API_BASE = "https://performedge.onrender.com";
+import { API_BASE } from "@/lib/api";
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();

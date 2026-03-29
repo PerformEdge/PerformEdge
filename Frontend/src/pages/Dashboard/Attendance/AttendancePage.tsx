@@ -9,8 +9,9 @@ import "@/utils/chartSetup";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-const API_BASE = "https://performedge.onrender.com";
+
 import FilterControls from "@/components/FilterControls";
+import { API_BASE } from "@/lib/api";
 
 const kpiIcons = { present: UserCheck, late: Clock, on_leave: UserX, overtime: Timer };
 

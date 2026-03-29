@@ -6,6 +6,7 @@ import "@/utils/chartSetup";
 import PerformanceFilters from "@/components/PerformanceFilters";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
+import { API_BASE } from "@/lib/api";
 
 /* ================= TYPES ================= */
 
@@ -25,7 +26,6 @@ interface ApiResponse {
 }
 
 /* ---------------- API BASE ---------------- */
-const API_BASE = "https://performedge.onrender.com";
 
 /* ---------------- AUTH HEADER ---------------- */
 function getAuthHeaders(): HeadersInit {

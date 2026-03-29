@@ -4,8 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import PerformanceFilters from "@/components/PerformanceFilters";
 import { toast } from "@/components/ui/sonner";
-
-const API_BASE = "https://performedge.onrender.com";
+import { API_BASE } from "@/lib/api";
 
 type TrainingBar = { name: string; value: number; color: string };
 

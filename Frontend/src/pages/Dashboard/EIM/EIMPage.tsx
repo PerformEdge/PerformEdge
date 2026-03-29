@@ -6,10 +6,9 @@ import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Users, UserPlus, UserX, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-
+import { API_BASE } from "@/lib/api";
 
 /* ================= API ================= */
-const API_BASE = "https://performedge.onrender.com";
 
 /* ================= TYPES ================= */
 
@@ -271,7 +270,6 @@ const ageChart = {
   ],
 };
 
-
   const trendChart = {
     labels: data.charts.staff_trend.labels,
     datasets: [
@@ -470,7 +468,6 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
     </div>
   );
 }
-
 
 function StatCard({
   title,

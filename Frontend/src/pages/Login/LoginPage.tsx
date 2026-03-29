@@ -8,8 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/sonner";
 import { FormAlert } from "@/components/FormAlert";
 import { normalizeEmail, sanitizeInput, setAuthSession } from "@/lib/security";
-
-const API_BASE = "https://performedge.onrender.com";
+import { API_BASE } from "@/lib/api";
 
 type LoginRole = "employee" | "manager";
 

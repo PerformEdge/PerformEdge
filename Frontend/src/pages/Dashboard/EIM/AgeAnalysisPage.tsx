@@ -6,7 +6,7 @@ import PerformanceFilters from "@/components/PerformanceFilters";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import type { ChartOptions } from "chart.js";
-
+import { apiUrl } from "@/lib/api";
 
 /* ================= TYPES ================= */
 interface AgeGroup {
@@ -28,8 +28,8 @@ interface ApiResponse {
 }
 
 /* ================= API ================= */
-const API_URL = "http://localhost:8000/eim/age-analysis";
-const REPORT_URL = "http://localhost:8000/eim/age-analysis/report";
+const API_URL = apiUrl("/eim/age-analysis");
+const REPORT_URL = apiUrl("/eim/age-analysis/report");
 
 /* ================= COMPONENT ================= */
 function getAuthHeaders(): HeadersInit {
@@ -41,7 +41,6 @@ function getAuthHeaders(): HeadersInit {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
-
 
 export default function AgeAnalysisDashboard() {
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -92,7 +91,6 @@ useEffect(() => {
 
   fetchData();
 }, [dateRange, department, location]);
-
 
   /* ================= DOWNLOAD PDF ================= */
   const onDownloadReport = async () => {

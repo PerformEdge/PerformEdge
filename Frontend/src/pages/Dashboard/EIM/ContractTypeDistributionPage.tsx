@@ -5,10 +5,9 @@ import PerformanceFilters from "@/components/PerformanceFilters";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { API_BASE } from "@/lib/api";
 
 /*---------------- ApI Base---------------*/
-
-const API_BASE = "https://performedge.onrender.com";
 
 /* ---------------- TYPES ---------------- */
 
@@ -48,7 +47,6 @@ function getAuthHeaders(): HeadersInit {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
-
 
 /* ---------------- COMPONENT ---------------- */
 

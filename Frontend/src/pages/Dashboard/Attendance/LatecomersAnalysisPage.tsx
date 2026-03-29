@@ -8,9 +8,10 @@ import "@/utils/chartSetup";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import FilterControls from "@/components/FilterControls";
+import { apiUrl } from "@/lib/api";
 
 // Use explicit backend base to avoid Vite returning index.html in dev
-const API_BASE = "http://localhost:8000/latecomers";
+const API_BASE = apiUrl("/latecomers");
 
 function isDarkMode() {
   if (typeof window === "undefined") return false;
@@ -77,7 +78,7 @@ export default function LatecomersAnalysisPage() {
   useEffect(() => {
     const initializeDateRange = async () => {
       try {
-        const res = await fetch("http://localhost:8000/attendance/latest-date?default_days=7");
+        const res = await fetch(apiUrl("/attendance/latest-date?default_days=7"));
         const data = await res.json();
         if (data?.start && data?.end) {
           setStartDate(data.start);

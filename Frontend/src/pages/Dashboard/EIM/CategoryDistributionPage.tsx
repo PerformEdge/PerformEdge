@@ -5,6 +5,7 @@ import "@/utils/chartSetup";
 import PerformanceFilters from "@/components/PerformanceFilters";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
+import { API_BASE } from "@/lib/api";
 
 interface ApiResponse {
   labels: string[];
@@ -14,7 +15,7 @@ interface ApiResponse {
   employees: { name: string; department: string; category: string }[];
 }
 
-const API_Base = "http://127.0.0.1:8000";
+const API_Base = API_BASE;
 
 const colors: { [key: string]: string } = {
   "Acedemic": "#2663c4",
@@ -118,7 +119,6 @@ export default function CategoryDistribution() {
     }
   };
 
-
   if (loading) return <p>Loading category distribution...</p>;
   if (!data) return <p>No data available</p>;
   
@@ -153,7 +153,6 @@ const chartOptions = {
     },
   },
 };
-
 
   return (
      <div className="space-y-6 p-6">
