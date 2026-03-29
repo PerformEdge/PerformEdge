@@ -51,6 +51,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/sonner";
 import { section } from "framer-motion/client";
 
+const YOUTUBE_DEMO_URL = "https://www.youtube.com/watch?v=nXABeHwZsE0";
+
 const NAV_ITEMS = [
   { label: "Product", href: "#home" },
   { label: "Solutions", href: "#solution" },
@@ -202,7 +204,7 @@ const PIE_COLORS = [
   "hsl(var(--chart-4))",
 ];
 
-function Header({ onOpenMobile, onOpenDemo }) {
+function Header({ onOpenMobile }) {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-background/70 backdrop-blur">
       <div className="container flex h-16 items-center justify-between gap-4">
@@ -249,12 +251,15 @@ function Header({ onOpenMobile, onOpenDemo }) {
           
           </Link>
 
-          <button
-            onClick={onOpenDemo}
+          <a
+            href={YOUTUBE_DEMO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             className={buttonClasses({ variant: "default", size: "sm", className: "hidden sm:inline-flex ml-2" })}
->
+          >
+            <Play className="h-4 w-4" />
             Watch Demo
-          </button>
+          </a>
 
           {/* Mobile menu button */}
           <button
@@ -1106,7 +1111,7 @@ function Team() {
   );
 }
 
-function Contact({ showDemo, setShowDemo }) {
+function Contact() {
 
   const [form, setForm] = React.useState({
     name: "",
@@ -1210,12 +1215,15 @@ function Contact({ showDemo, setShowDemo }) {
                     <ArrowRight className="h-4 w-4" />
                   </Link>
 
-                  <button
-                    onClick={() => setShowDemo(true)}
-                    className={buttonClasses({ variant: "default", size: "lg" })}>
+                  <a
+                    href={YOUTUBE_DEMO_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={buttonClasses({ variant: "default", size: "lg" })}
+                  >
                     <Play className="h-4 w-4" />
                     Watch Demo
-                  </button>
+                  </a>
 
                 </div>
 
@@ -1230,46 +1238,6 @@ function Contact({ showDemo, setShowDemo }) {
           </Reveal>
         </div>
       </div>
-
-      {/* DEMO VIDEO POPUP */}
-      <AnimatePresence>
-        {showDemo && (
-          <motion.div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setShowDemo(false)}
-          >
-            <motion.div
-              className="relative w-[90%] max-w-4xl rounded-2xl bg-background p-4 shadow-2xl"
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-
-              <button
-                onClick={() => setShowDemo(false)}
-                className="absolute right-3 top-3 rounded-full border border-border p-2"
-              >
-                <X className="h-4 w-4" />
-              </button>
-
-              <video
-                controls
-                autoPlay
-                muted
-                playsInline
-                className="w-full rounded-lg">
-                <source src="/assets/product-demo.mp4" type="video/mp4" />
-              </video>
-
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
     </section>
   );
 }
@@ -1307,7 +1275,7 @@ function Footer() {
 
             <p className="mt-3 max-w-md text-sm text-muted-foreground">
               PerformEdge is a centralized HR analytics dashboard MVP designed to deliver clear,
-              real-time workforce insights through clean visual reporting.
+              real time workforce insights through clean visual reporting.
             </p>
           </div>
 
@@ -1362,13 +1330,11 @@ function Footer() {
 
 export default function ProductPage() {
   const [mobileOpen, setMobileOpen] = React.useState(false);
-  const [showDemo, setShowDemo] = React.useState(false);
 
   return (
     <div className="min-h-screen">
 <Header
   onOpenMobile={() => setMobileOpen(true)}
-  onOpenDemo={() => setShowDemo(true)}
 />
       <MobileMenu open={mobileOpen} onClose={() => setMobileOpen(false)} />
 
@@ -1381,7 +1347,7 @@ export default function ProductPage() {
         <Learn />
         <Pricing />
         <Team />
-        <Contact showDemo={showDemo} setShowDemo={setShowDemo} />
+        <Contact />
       </main>
 
       <Footer />
