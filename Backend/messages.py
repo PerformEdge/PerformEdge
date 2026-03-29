@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from functools import lru_cache
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -9,22 +10,67 @@ from pydantic import BaseModel, EmailStr
 
 from database import get_db_connection
 from security import verify_token
-from psycopg2.extras import RealDictCursor
 
 router = APIRouter(prefix="/messages", tags=["Messages"])
 
-# DB helpers
-def _fetch_all(sql: str, params: Tuple[Any, ...] = ()) -> List[Dict[str, Any]]:
-    conn = get_db_connection()
+
+@lru_cache(maxsize=16)
+def _column_is_boolean(table_name: str, column_name: str) -> bool:
+    conn = None
+    cur = None
     try:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute(sql, params)
-        return cur.fetchall()
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            """
+            SELECT data_type
+            FROM information_schema.columns
+            WHERE table_name = %s AND column_name = %s
+            LIMIT 1
+            """,
+            (table_name, column_name),
+        )
+        row = cur.fetchone() or {}
+        data_type = row.get("data_type") if isinstance(row, dict) else None
+        return str(data_type or "").lower() == "boolean"
+    except Exception:
+        return False
     finally:
+        try:
+            if cur is not None:
+                cur.close()
+        except Exception:
+            pass
         try:
             conn.close()
         except Exception:
             pass
+
+
+
+def _flag_value(table_name: str, column_name: str, truthy: bool):
+    return bool(truthy) if _column_is_boolean(table_name, column_name) else int(truthy)
+
+
+
+def _fetch_all(sql: str, params: Tuple[Any, ...] = ()) -> List[Dict[str, Any]]:
+    conn = get_db_connection()
+    cur = None
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(sql, params)
+        return cur.fetchall()
+    finally:
+        try:
+            if cur is not None:
+                cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 
 
 def _fetch_one(sql: str, params: Tuple[Any, ...] = ()) -> Optional[Dict[str, Any]]:
@@ -32,8 +78,10 @@ def _fetch_one(sql: str, params: Tuple[Any, ...] = ()) -> Optional[Dict[str, Any
     return rows[0] if rows else None
 
 
+
 def _execute(sql: str, params: Tuple[Any, ...] = ()) -> int:
     conn = get_db_connection()
+    cur = None
     try:
         cur = conn.cursor()
         cur.execute(sql, params)
@@ -41,11 +89,17 @@ def _execute(sql: str, params: Tuple[Any, ...] = ()) -> int:
         return cur.rowcount
     finally:
         try:
+            if cur is not None:
+                cur.close()
+        except Exception:
+            pass
+        try:
             conn.close()
         except Exception:
             pass
 
-# Auth helpers
+
+
 def _payload_from_token(authorization: Optional[str]) -> Dict[str, Any]:
     if not authorization:
         return {}
@@ -53,6 +107,7 @@ def _payload_from_token(authorization: Optional[str]) -> Dict[str, Any]:
     if len(parts) == 2 and parts[0].lower() == "bearer":
         return verify_token(parts[1]) or {}
     return {}
+
 
 
 def _resolve_user_id(user_id_query: Optional[int], authorization: Optional[str]) -> int:
@@ -63,8 +118,6 @@ def _resolve_user_id(user_id_query: Optional[int], authorization: Optional[str])
         return int(payload["user_id"])
     return 1
 
-
-# API
 
 @router.get("/inbox")
 def inbox(
@@ -98,9 +151,9 @@ def inbox(
         (uid, limit),
     )
 
-    for r in rows:
-        if isinstance(r.get("created_at"), datetime):
-            r["created_at"] = r["created_at"].isoformat()
+    for row in rows:
+        if isinstance(row.get("created_at"), datetime):
+            row["created_at"] = row["created_at"].isoformat()
 
     return {"items": rows}
 
@@ -137,9 +190,9 @@ def sent(
         (uid, limit),
     )
 
-    for r in rows:
-        if isinstance(r.get("created_at"), datetime):
-            r["created_at"] = r["created_at"].isoformat()
+    for row in rows:
+        if isinstance(row.get("created_at"), datetime):
+            row["created_at"] = row["created_at"].isoformat()
 
     return {"items": rows}
 
@@ -150,7 +203,11 @@ def unread_count(
     authorization: Optional[str] = Header(None),
 ):
     uid = _resolve_user_id(user_id, authorization)
-    row = _fetch_one("SELECT COUNT(*) AS cnt FROM messages WHERE receiver_user_id=%s AND is_read=0", (uid,))
+    unread_value = _flag_value("messages", "is_read", False)
+    row = _fetch_one(
+        "SELECT COUNT(*) AS cnt FROM messages WHERE receiver_user_id=%s AND is_read=%s",
+        (uid, unread_value),
+    )
     return {"count": int(row["cnt"]) if row else 0}
 
 
@@ -174,13 +231,22 @@ def send_message(
 
     mid = f"M{uuid.uuid4().hex[:10].upper()}"
     now = datetime.utcnow()
+    unread_value = _flag_value("messages", "is_read", False)
 
     _execute(
         """
         INSERT INTO messages (message_id, sender_user_id, receiver_user_id, subject, body, created_at, is_read)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
         """,
-        (mid, sender_id, int(receiver["user_id"]), payload.subject, payload.body, now, 0),
+        (
+            mid,
+            sender_id,
+            int(receiver["user_id"]),
+            payload.subject,
+            payload.body,
+            now,
+            unread_value,
+        ),
     )
 
     return {"message_id": mid}
@@ -197,9 +263,10 @@ def mark_read(
     authorization: Optional[str] = Header(None),
 ):
     uid = _resolve_user_id(user_id, authorization)
+    read_value = _flag_value("messages", "is_read", True)
 
     updated = _execute(
-        "UPDATE messages SET is_read=1 WHERE receiver_user_id=%s AND message_id=%s",
-        (uid, body.message_id),
+        "UPDATE messages SET is_read=%s WHERE receiver_user_id=%s AND message_id=%s",
+        (read_value, uid, body.message_id),
     )
     return {"updated": updated}

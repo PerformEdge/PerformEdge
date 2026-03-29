@@ -79,3 +79,8 @@ app.include_router(nopay_router)
 @app.get("/")
 def root():
     return {"message": "PerformEdge backend is running"}
+
+
+@app.head("/")
+def root_head():
+    return {}

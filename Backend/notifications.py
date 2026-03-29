@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Header, HTTPException, Query
@@ -11,23 +12,69 @@ from security import verify_token
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
-# DB helpers
 
-def _fetch_all(sql: str, params: Tuple[Any, ...] = ()) -> List[Dict[str, Any]]:
-    conn = get_db_connection()
+@lru_cache(maxsize=16)
+def _column_is_boolean(table_name: str, column_name: str) -> bool:
+    conn = None
+    cur = None
     try:
+        conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
-        cur.execute(sql, params)
-        return cur.fetchall()
+        cur.execute(
+            """
+            SELECT data_type
+            FROM information_schema.columns
+            WHERE table_name = %s AND column_name = %s
+            LIMIT 1
+            """,
+            (table_name, column_name),
+        )
+        row = cur.fetchone() or {}
+        data_type = row.get("data_type") if isinstance(row, dict) else None
+        return str(data_type or "").lower() == "boolean"
+    except Exception:
+        return False
     finally:
+        try:
+            if cur is not None:
+                cur.close()
+        except Exception:
+            pass
         try:
             conn.close()
         except Exception:
             pass
 
 
+
+def _flag_value(table_name: str, column_name: str, truthy: bool):
+    return bool(truthy) if _column_is_boolean(table_name, column_name) else int(truthy)
+
+
+
+def _fetch_all(sql: str, params: Tuple[Any, ...] = ()) -> List[Dict[str, Any]]:
+    conn = get_db_connection()
+    cur = None
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(sql, params)
+        return cur.fetchall()
+    finally:
+        try:
+            if cur is not None:
+                cur.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+
 def _execute(sql: str, params: Tuple[Any, ...] = ()) -> int:
     conn = get_db_connection()
+    cur = None
     try:
         cur = conn.cursor()
         cur.execute(sql, params)
@@ -35,11 +82,16 @@ def _execute(sql: str, params: Tuple[Any, ...] = ()) -> int:
         return cur.rowcount
     finally:
         try:
+            if cur is not None:
+                cur.close()
+        except Exception:
+            pass
+        try:
             conn.close()
         except Exception:
             pass
 
-# Auth helpers
+
 
 def _payload_from_token(authorization: Optional[str]) -> Dict[str, Any]:
     if not authorization:
@@ -50,16 +102,15 @@ def _payload_from_token(authorization: Optional[str]) -> Dict[str, Any]:
     return {}
 
 
+
 def _resolve_user_id(user_id_query: Optional[int], authorization: Optional[str]) -> int:
     if user_id_query:
         return int(user_id_query)
     payload = _payload_from_token(authorization)
     if payload.get("user_id") is not None:
         return int(payload["user_id"])
-    # Fallback for local testing
     return 1
 
-# API
 
 @router.get("")
 def list_notifications(
@@ -77,16 +128,16 @@ def list_notifications(
     """
     params: List[Any] = [uid]
     if unread_only:
-        sql += " AND is_read=0"
+        sql += " AND is_read=%s"
+        params.append(_flag_value("notifications", "is_read", False))
     sql += " ORDER BY created_at DESC LIMIT %s"
     params.append(limit)
 
     rows = _fetch_all(sql, tuple(params))
 
-    # Ensure JSON-friendly datetime serialization
-    for r in rows:
-        if isinstance(r.get("created_at"), datetime):
-            r["created_at"] = r["created_at"].isoformat()
+    for row in rows:
+        if isinstance(row.get("created_at"), datetime):
+            row["created_at"] = row["created_at"].isoformat()
 
     return {"items": rows}
 
@@ -97,11 +148,12 @@ def unread_count(
     authorization: Optional[str] = Header(None),
 ):
     uid = _resolve_user_id(user_id, authorization)
-    row = _fetch_all(
-        "SELECT COUNT(*) AS cnt FROM notifications WHERE user_id=%s AND is_read=0",
-        (uid,),
+    unread_value = _flag_value("notifications", "is_read", False)
+    rows = _fetch_all(
+        "SELECT COUNT(*) AS cnt FROM notifications WHERE user_id=%s AND is_read=%s",
+        (uid, unread_value),
     )
-    cnt = int(row[0]["cnt"]) if row else 0
+    cnt = int(rows[0]["cnt"]) if rows else 0
     return {"count": cnt}
 
 
@@ -120,10 +172,13 @@ def mark_read(
     if not body.ids:
         raise HTTPException(status_code=400, detail="No notification ids provided")
 
-    # Build placeholders for IN clause
     placeholders = ",".join(["%s"] * len(body.ids))
-    sql = f"UPDATE notifications SET is_read=1 WHERE user_id=%s AND notification_id IN ({placeholders})"
-    params = tuple([uid, *body.ids])
+    read_value = _flag_value("notifications", "is_read", True)
+    sql = (
+        f"UPDATE notifications SET is_read=%s "
+        f"WHERE user_id=%s AND notification_id IN ({placeholders})"
+    )
+    params = tuple([read_value, uid, *body.ids])
 
     updated = _execute(sql, params)
     return {"updated": updated}
@@ -135,8 +190,10 @@ def mark_all_read(
     authorization: Optional[str] = Header(None),
 ):
     uid = _resolve_user_id(user_id, authorization)
+    read_value = _flag_value("notifications", "is_read", True)
+    unread_value = _flag_value("notifications", "is_read", False)
     updated = _execute(
-        "UPDATE notifications SET is_read=1 WHERE user_id=%s AND is_read=0",
-        (uid,),
+        "UPDATE notifications SET is_read=%s WHERE user_id=%s AND is_read=%s",
+        (read_value, uid, unread_value),
     )
     return {"updated": updated}

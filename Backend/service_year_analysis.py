@@ -1,17 +1,19 @@
 from datetime import date
-from fastapi import APIRouter, Header, HTTPException, Query
-from typing import Optional, List, Dict
-from database import get_database_connection
-from security import verify_token
-from fastapi.responses import StreamingResponse
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
+from typing import Dict, List, Optional
 import io
-from date_utils import resolve_date_range, active_during_range_sql
+
+from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+
+from database import get_database_connection
+from date_utils import active_during_range_sql, resolve_date_range
+from security import verify_token
 
 router = APIRouter(prefix="/eim", tags=["EIM"])
 
-#  COMPANY RESOLUTION (SECURE)
+
 
 def _get_company_id(authorization: Optional[str]) -> str:
     if not authorization:
@@ -31,8 +33,28 @@ def _get_company_id(authorization: Optional[str]) -> str:
 
 
 
-#  BUSINESS LOGIC (REUSABLE FUNCTION)
-# Apply date range filter to return records only within the selected period
+def _years_of_service(reference_date: date, join_date: Optional[date]) -> int:
+    if not join_date:
+        return 0
+    years = reference_date.year - join_date.year
+    if (reference_date.month, reference_date.day) < (join_date.month, join_date.day):
+        years -= 1
+    return max(years, 0)
+
+
+
+def _service_bucket(years: int) -> str:
+    if years < 1:
+        return "0-1"
+    if 1 <= years <= 3:
+        return "1-3"
+    if 4 <= years <= 6:
+        return "4-6"
+    if 7 <= years <= 10:
+        return "7-10"
+    return "10+"
+
+
 
 def _get_service_year_data(
     company_id: str,
@@ -40,26 +62,20 @@ def _get_service_year_data(
     department: Optional[str] = "",
     location: Optional[str] = "",
 ):
-
     conn = get_database_connection()
     cursor = conn.cursor(dictionary=True)
-
-    today = date.today()
 
     filters_sql = " WHERE e.company_id = %s "
     params: List = [company_id]
 
-    # DEPARTMENT FILTER
     if department:
         filters_sql += " AND e.department_id = %s "
         params.append(department)
 
-    # LOCATION FILTER
     if location:
         filters_sql += " AND e.location_id = %s "
         params.append(location)
 
-    # DATE FILTER (employees active during selected period)
     if date_range:
         start_date, end_date = resolve_date_range(date_range=date_range)
         active_clause, active_params = active_during_range_sql(
@@ -70,92 +86,87 @@ def _get_service_year_data(
         filters_sql += active_clause
         params.extend(active_params)
 
-    #  DISTRIBUTION 
-    cursor.execute(f"""
-        SELECT label, COUNT(*) AS value
-        FROM (
+    try:
+        cursor.execute(
+            f"""
             SELECT
-                CASE
-                    WHEN TIMESTAMPDIFF(YEAR, e.join_date, %s) < 1 THEN '0-1'
-                    WHEN TIMESTAMPDIFF(YEAR, e.join_date, %s) BETWEEN 1 AND 3 THEN '1-3'
-                    WHEN TIMESTAMPDIFF(YEAR, e.join_date, %s) BETWEEN 4 AND 6 THEN '4-6'
-                    WHEN TIMESTAMPDIFF(YEAR, e.join_date, %s) BETWEEN 7 AND 10 THEN '7-10'
-                    ELSE '10+'
-                END AS label
+                e.full_name AS name,
+                e.join_date,
+                d.department_name AS department
             FROM employees e
+            LEFT JOIN departments d ON e.department_id = d.department_id
             {filters_sql}
-        ) t
-        GROUP BY label
-        ORDER BY
-            CASE label
-                WHEN '0-1' THEN 1
-                WHEN '1-3' THEN 2
-                WHEN '4-6' THEN 3
-                WHEN '7-10' THEN 4
-                ELSE 5
-            END
-    """, [today, today, today, today] + params)
+            ORDER BY e.join_date ASC, e.full_name ASC
+            """,
+            tuple(params),
+        )
+        rows = cursor.fetchall() or []
+    finally:
+        cursor.close()
+        conn.close()
 
-    chart_rows = cursor.fetchall()
+    today = date.today()
+    bucket_order = ["0-1", "1-3", "4-6", "7-10", "10+"]
+    bucket_counts = {label: 0 for label in bucket_order}
+    top_long_serving: List[Dict[str, object]] = []
+    staff: List[Dict[str, object]] = []
+    loyal_count = 0
 
-    #  LOYALTY INDEX 
-    cursor.execute(f"""
-        SELECT
-            ROUND(
-                IF(COUNT(*) = 0, 0,
-                    (SUM(CASE WHEN TIMESTAMPDIFF(YEAR, e.join_date, %s) >= 10 THEN 1 ELSE 0 END)
-                    / COUNT(*)) * 100
-                ), 0
-            ) AS loyalty
-        FROM employees e
-        {filters_sql}
-    """, [today] + params)
+    for row in rows:
+        years = _years_of_service(today, row.get("join_date"))
+        bucket = _service_bucket(years)
+        bucket_counts[bucket] += 1
+        if years >= 10:
+            loyal_count += 1
 
-    loyalty_index = cursor.fetchone()["loyalty"] or 0
+        top_long_serving.append(
+            {
+                "name": row.get("name"),
+                "years": years,
+                "join_date": row.get("join_date"),
+            }
+        )
+        staff.append(
+            {
+                "name": row.get("name"),
+                "department": row.get("department"),
+                "years": f"{years} yrs",
+                "sort_years": years,
+            }
+        )
 
-    #  TOP LONG SERVING 
-    cursor.execute(f"""
-        SELECT
-            e.full_name AS name,
-            TIMESTAMPDIFF(YEAR, e.join_date, %s) AS years
-        FROM employees e
-        {filters_sql}
-        ORDER BY e.join_date ASC
-        LIMIT 5
-    """, [today] + params)
+    top_long_serving = [
+        {"name": row.get("name"), "years": row.get("years")}
+        for row in sorted(
+            top_long_serving,
+            key=lambda item: (
+                item.get("join_date") or date.max,
+                str(item.get("name") or ""),
+            ),
+        )[:5]
+    ]
 
-    top_long_serving = cursor.fetchall()
-
-    #  STAFF TABLE 
-    cursor.execute(f"""
-        SELECT
-            e.full_name AS name,
-            d.department_name AS department,
-            CONCAT(TIMESTAMPDIFF(YEAR, e.join_date, %s), ' yrs') AS years
-        FROM employees e
-        LEFT JOIN departments d ON e.department_id = d.department_id
-        {filters_sql}
-        ORDER BY e.join_date
-    """, [today] + params)
-
-    staff = cursor.fetchall()
-
-    cursor.close()
-    conn.close()
+    loyalty_index = round((loyal_count / len(rows)) * 100, 0) if rows else 0
 
     return {
         "chart": {
-            "labels": [r["label"] for r in chart_rows],
-            "values": [r["value"] for r in chart_rows],
+            "labels": bucket_order,
+            "values": [bucket_counts[label] for label in bucket_order],
         },
         "loyalty_index": loyalty_index,
         "top_long_serving": top_long_serving,
-        "staff": staff,
+        "staff": [
+            {
+                "name": row["name"],
+                "department": row.get("department"),
+                "years": row["years"],
+            }
+            for row in sorted(
+                staff,
+                key=lambda item: (-int(item["sort_years"]), str(item.get("name") or "")),
+            )
+        ],
     }
-
-
-#  API ENDPOINT
-# return all service year data for frontend
 
 
 @router.get("/service-year-analysis")
@@ -176,7 +187,6 @@ def service_year_analysis(
 
 
 
-#  PDF GENERATOR
 def _pdf_make(
     *,
     title: str,
@@ -184,8 +194,6 @@ def _pdf_make(
     filters: Optional[Dict[str, str]] = None,
     lines: Optional[List[str]] = None,
 ) -> io.BytesIO:
-    """Create a simple PDF (in-memory) and return a BytesIO buffer."""
-
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)
     width, height = letter
@@ -194,18 +202,15 @@ def _pdf_make(
     margin_bottom = 72
     y = height - 56
 
-    # ---- Title ----
     c.setFont("Helvetica-Bold", 16)
     c.drawString(margin_x, y, title)
     y -= 22
 
-    # ---- Subtitle ----
     if subtitle:
         c.setFont("Helvetica", 10)
         c.drawString(margin_x, y, subtitle)
         y -= 18
 
-    # ---- Filters ----
     if filters:
         c.setFont("Helvetica-Bold", 10)
         c.drawString(margin_x, y, "Filters")
@@ -223,7 +228,6 @@ def _pdf_make(
 
         y -= 6
 
-    # ---- Content ----
     c.setFont("Helvetica", 10)
 
     for line in (lines or []):
@@ -239,8 +243,6 @@ def _pdf_make(
     buf.seek(0)
     return buf
 
-#  REPORT ENDPOINT
-# Generate the report using the filtered employee data
 
 @router.get("/service-year-analysis/report")
 def service_year_analysis_report(
@@ -258,7 +260,7 @@ def service_year_analysis_report(
         location=location,
     )
     filters = {
-        "Date Range": date_range or "All Time", 
+        "Date Range": date_range or "All Time",
         "Department": department or "All Departments",
         "Location": location or "All Locations",
     }
@@ -270,16 +272,18 @@ def service_year_analysis_report(
     ]
 
     for label, value in zip(data["chart"]["labels"], data["chart"]["values"]):
-        lines.append(f"- {label}: {value} years")
+        lines.append(f"- {label}: {value} employees")
 
     lines.append("")
     lines.append("Top Long-Serving Employees:")
 
     for emp in data["top_long_serving"]:
         lines.append(f"- {emp['name']} ({emp['years']} yrs)")
-    
+
+    lines.append("")
+    lines.append("Staff:")
     for emp in data["staff"]:
-        lines.append(f"- {emp['name']} | {emp['department']} | {emp['years']} ")
+        lines.append(f"- {emp['name']} | {emp['department']} | {emp['years']}")
 
     buf = _pdf_make(title="Service Year Analysis Report", filters=filters, lines=lines)
 

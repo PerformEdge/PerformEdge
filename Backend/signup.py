@@ -1,15 +1,15 @@
+from datetime import date
+from typing import Literal
+import uuid
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
-import mysql.connector
-import uuid
-from datetime import date
-from typing import List, Literal, Optional
 
 from database import get_database_connection
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-# SIGNUP 
+
 class SignupRequest(BaseModel):
     company_id: str
     user_name: str
@@ -17,12 +17,12 @@ class SignupRequest(BaseModel):
     password: str
     signup_as: Literal["employee", "manager"]
 
+
 @router.post("/signup")
 def signup(data: SignupRequest):
     if not data.company_id.strip() or not data.user_name.strip():
         raise HTTPException(status_code=400, detail="company_id and user_name are required")
 
-    # because password column is varchar(6)
     if len(data.password) > 6:
         raise HTTPException(status_code=400, detail="Password must be 6 characters or less")
 
@@ -32,7 +32,7 @@ def signup(data: SignupRequest):
     try:
         cursor.execute(
             "SELECT company_id FROM companies WHERE company_id = %s",
-            (data.company_id,),
+            (data.company_id.strip(),),
         )
         if not cursor.fetchone():
             raise HTTPException(status_code=400, detail="Invalid company_id (company not found)")
@@ -41,7 +41,7 @@ def signup(data: SignupRequest):
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Email already registered")
 
-        cursor.execute("SELECT user_id FROM users WHERE user_name = %s", (data.user_name,))
+        cursor.execute("SELECT user_id FROM users WHERE user_name = %s", (data.user_name.strip(),))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Username already taken")
 
@@ -50,16 +50,28 @@ def signup(data: SignupRequest):
             INSERT INTO users (company_id, email, password, status, user_name)
             VALUES (%s, %s, %s, %s, %s)
             """,
-            (data.company_id.strip(), data.email, data.password, "ACTIVE", data.user_name.strip()),
+            (
+                data.company_id.strip(),
+                data.email,
+                data.password,
+                "ACTIVE",
+                data.user_name.strip(),
+            ),
         )
         conn.commit()
 
-        
+        new_user_id = getattr(cursor, "lastrowid", None)
+        if not new_user_id:
+            cursor.execute(
+                "SELECT user_id FROM users WHERE email = %s ORDER BY user_id DESC LIMIT 1",
+                (data.email,),
+            )
+            row = cursor.fetchone() or {}
+            new_user_id = row.get("user_id")
 
-        # Assign a default role so the login screen can correctly gate
-        # Employee vs Manager dashboards.
-        # Default new users to EMPLOYEE.
-        new_user_id = cursor.lastrowid
+        if not new_user_id:
+            raise HTTPException(status_code=500, detail="Signup succeeded but user id could not be resolved")
+
         try:
             if data.signup_as == "manager":
                 cursor.execute(
@@ -70,22 +82,19 @@ def signup(data: SignupRequest):
                     "SELECT role_id FROM roles WHERE role_name='EMPLOYEE' LIMIT 1"
                 )
 
-            role_row = cursor.fetchone()
-            role_id = (role_row or {}).get("role_id") or "R003"
+            role_row = cursor.fetchone() or {}
+            role_id = role_row.get("role_id") or "R003"
 
             ur_id = f"UR{uuid.uuid4().hex[:10].upper()}"
             cursor.execute(
                 "INSERT INTO user_roles (user_role_id, user_id, role_id) VALUES (%s, %s, %s)",
-                (ur_id, new_user_id, role_id),
+                (ur_id, int(new_user_id), role_id),
             )
             conn.commit()
         except Exception:
-            # If roles/user_roles tables are missing, don't fail signup; the
-            # system can still work in demo mode.
-            pass
+            # Keep signup working even if role bootstrap is not fully provisioned.
+            conn.rollback()
 
-        # Create an employee profile linked to the signed-up user.
-        # This allows employee dashboard/profile APIs to resolve the user.
         try:
             employee_id = f"E{uuid.uuid4().hex[:10].upper()}"
             employee_code = f"EMP-{str(new_user_id).zfill(4)}"
@@ -108,7 +117,7 @@ def signup(data: SignupRequest):
                     employee_id,
                     data.company_id.strip(),
                     None,
-                    new_user_id,
+                    int(new_user_id),
                     employee_code,
                     data.user_name.strip(),
                     "General",
@@ -118,15 +127,19 @@ def signup(data: SignupRequest):
             )
             conn.commit()
         except Exception:
-            # Keep auth signup available even if employee bootstrap fails
-            # (e.g. partially provisioned schema in demo environments).
+            # Keep auth signup available even if employee bootstrap fails.
+            conn.rollback()
+
+        return {"message": "Signup successful", "user_id": int(new_user_id)}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
             pass
-
-        return {"message": "Signup successful", "user_id": new_user_id}
-
-    except mysql.connector.Error as e:
         raise HTTPException(status_code=500, detail=f"DB error: {str(e)}")
-
     finally:
         cursor.close()
         conn.close()
