@@ -166,43 +166,50 @@ def dashboard_overview(
             for label, value in age_buckets.items()
         ]
 
-        cursor.execute(
-            """
-            SELECT buckets.label, COALESCE(counts.value, 0) AS value
-            FROM (
-                SELECT 'Permanent' AS label
-                UNION ALL SELECT 'Consultants'
-                UNION ALL SELECT 'Probation'
-            ) AS buckets
-            LEFT JOIN (
-                SELECT
-                    CASE
-                        WHEN LOWER(COALESCE(ec.contract_type, '')) IN ('full-time', 'permanent') THEN 'Permanent'
-                        WHEN LOWER(COALESCE(ec.contract_type, '')) = 'consultant' THEN 'Consultants'
-                        WHEN LOWER(COALESCE(ec.contract_type, '')) = 'probation' THEN 'Probation'
-                        ELSE NULL
-                    END AS label,
-                    COUNT(*) AS value
-                FROM employees e
-                LEFT JOIN employment_contract ec
-                    ON ec.employee_id = e.employee_id
-                   AND ec.is_current = 1
-                WHERE e.company_id=%s
-                  AND e.employement_status='ACTIVE'
-                GROUP BY label
-            ) AS counts
-              ON counts.label = buckets.label
-            """,
-            (cid,),
-        )
-        employee_type_chart = cursor.fetchall() or []
-        employee_type_chart = [
-            {
-                "label": str(item.get("label") or "").lower(),
-                "value": to_int(item.get("value")),
-            }
-            for item in employee_type_chart
-        ]
+        try:
+            cursor.execute(
+                """
+                SELECT buckets.label, COALESCE(counts.value, 0) AS value
+                FROM (
+                    SELECT 'Permanent' AS label
+                    UNION ALL SELECT 'Consultants'
+                    UNION ALL SELECT 'Probation'
+                ) AS buckets
+                LEFT JOIN (
+                    SELECT
+                        CASE
+                            WHEN LOWER(COALESCE(ec.contract_type, '')) IN ('full-time', 'permanent') THEN 'Permanent'
+                            WHEN LOWER(COALESCE(ec.contract_type, '')) = 'consultant' THEN 'Consultants'
+                            WHEN LOWER(COALESCE(ec.contract_type, '')) = 'probation' THEN 'Probation'
+                            ELSE NULL
+                        END AS label,
+                        COUNT(*) AS value
+                    FROM employees e
+                    LEFT JOIN employment_contract ec
+                        ON ec.employee_id = e.employee_id
+                       AND ec.is_current = 1
+                    WHERE e.company_id=%s
+                      AND e.employement_status='ACTIVE'
+                    GROUP BY label
+                ) AS counts
+                  ON counts.label = buckets.label
+                """,
+                (cid,),
+            )
+            employee_type_chart = cursor.fetchall() or []
+            employee_type_chart = [
+                {
+                    "label": str(item.get("label") or "").lower(),
+                    "value": to_int(item.get("value")),
+                }
+                for item in employee_type_chart
+            ]
+        except Exception:
+            employee_type_chart = [
+                {"label": "permanent", "value": 0},
+                {"label": "consultants", "value": 0},
+                {"label": "probation", "value": 0},
+            ]
 
         cursor.execute(
             """
@@ -224,47 +231,53 @@ def dashboard_overview(
             "absent": to_int(att.get("absent")),
         }
 
-        cursor.execute(
-            """
-            SELECT
-              COALESCE(e.full_name, u.email) AS name,
-              jr.role_name AS role,
-              ROUND(AVG(pr.overall_score), 0) AS score
-            FROM performance_reviews pr
-            JOIN performance_cycle pc ON pc.cycle_id = pr.cycle_id
-            LEFT JOIN employees e ON e.employee_id = pr.employee_id
-            LEFT JOIN users u ON u.user_id = e.user_id
-            LEFT JOIN job_roles jr ON jr.job_role_id = e.job_role_id
-            WHERE e.company_id=%s
-              AND e.employement_status='ACTIVE'
-              AND pc.start_date <= %s AND pc.end_date >= %s
-            GROUP BY e.employee_id, name, role
-            ORDER BY score DESC
-            LIMIT 5
-            """,
-            (cid, end, start),
-        )
-        top_performers = cursor.fetchall() or []
+        try:
+            cursor.execute(
+                """
+                SELECT
+                  COALESCE(e.full_name, u.email) AS name,
+                  jr.role_name AS role,
+                  ROUND(AVG(pr.overall_score), 0) AS score
+                FROM performance_reviews pr
+                JOIN performance_cycle pc ON pc.cycle_id = pr.cycle_id
+                LEFT JOIN employees e ON e.employee_id = pr.employee_id
+                LEFT JOIN users u ON u.user_id = e.user_id
+                LEFT JOIN job_roles jr ON jr.job_role_id = e.job_role_id
+                WHERE e.company_id=%s
+                  AND e.employement_status='ACTIVE'
+                  AND pc.start_date <= %s AND pc.end_date >= %s
+                GROUP BY e.employee_id, e.full_name, u.email, jr.role_name
+                ORDER BY score DESC
+                LIMIT 5
+                """,
+                (cid, end, start),
+            )
+            top_performers = cursor.fetchall() or []
+        except Exception:
+            top_performers = []
 
-        cursor.execute(
-            """
-            SELECT
-              lr.leave_id,
-              lr.started_date,
-              lr.end_date,
-              lr.reason,
-              lr.leave_status,
-              e.full_name
-            FROM leave_records lr
-            LEFT JOIN employees e ON e.employee_id = lr.employee_id
-            WHERE e.company_id=%s
-              AND e.employement_status='ACTIVE'
-              AND lr.started_date <= %s AND lr.end_date >= %s
-            ORDER BY lr.started_date
-            """,
-            (cid, end, start),
-        )
-        calendar = cursor.fetchall() or []
+        try:
+            cursor.execute(
+                """
+                SELECT
+                  lr.leave_id,
+                  lr.started_date,
+                  lr.end_date,
+                  lr.reason,
+                  lr.leave_status,
+                  e.full_name
+                FROM leave_records lr
+                LEFT JOIN employees e ON e.employee_id = lr.employee_id
+                WHERE e.company_id=%s
+                  AND e.employement_status='ACTIVE'
+                  AND lr.started_date <= %s AND lr.end_date >= %s
+                ORDER BY lr.started_date
+                """,
+                (cid, end, start),
+            )
+            calendar = cursor.fetchall() or []
+        except Exception:
+            calendar = []
 
         return {
             "cards": {

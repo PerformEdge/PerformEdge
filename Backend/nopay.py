@@ -10,6 +10,8 @@ from date_utils import resolve_date_range
 
 router = APIRouter(prefix="/no-pay", tags=["No Pay"])
 
+NO_PAY_LIKE = "%no%pay%"
+
 
 @router.get("/summary")
 def no_pay_summary(start: Optional[date] = Query(None), end: Optional[date] = Query(None), dateRange: Optional[str] = Query(None, alias='dateRange'), department: Optional[str] = Query(None), location: Optional[str] = Query(None)):
@@ -21,7 +23,7 @@ def no_pay_summary(start: Optional[date] = Query(None), end: Optional[date] = Qu
     cur = conn.cursor(dictionary=True)
     try:
         filter_sql = ""
-        params = [start_resolved, end_resolved]
+        params = [NO_PAY_LIKE, start_resolved, end_resolved]
         if department and department != "All":
             filter_sql += " AND d.department_name = %s"
             params.append(department)
@@ -37,7 +39,7 @@ def no_pay_summary(start: Optional[date] = Query(None), end: Optional[date] = Qu
             JOIN employees e ON e.employee_id = lr.employee_id
             LEFT JOIN departments d ON d.department_id = e.department_id
             LEFT JOIN locations l ON l.location_id = e.location_id
-            WHERE LOWER(leave_type) LIKE '%no%pay%'
+            WHERE LOWER(leave_type) LIKE %s
             AND started_date BETWEEN %s AND %s
         """ + filter_sql, tuple(params))
         summary = cur.fetchone()
@@ -99,9 +101,9 @@ def no_pay_by_department(start: Optional[date] = Query(None), end: Optional[date
             JOIN employees e ON e.employee_id = lr.employee_id
             JOIN departments d ON d.department_id = e.department_id
             LEFT JOIN locations l ON l.location_id = e.location_id
-            WHERE LOWER(leave_type) LIKE '%no%pay%'
+            WHERE LOWER(leave_type) LIKE %s
             AND started_date BETWEEN %s AND %s
-        """ + filter_sql, tuple([start_resolved, end_resolved] + filter_params))
+        """ + filter_sql, tuple([NO_PAY_LIKE, start_resolved, end_resolved] + filter_params))
         total_row = cur.fetchone()
         total_nopay = total_row["total"] if total_row and total_row.get("total") else 1
         
@@ -113,11 +115,11 @@ def no_pay_by_department(start: Optional[date] = Query(None), end: Optional[date
             JOIN employees e ON e.employee_id=lr.employee_id
             JOIN departments d ON d.department_id=e.department_id
             LEFT JOIN locations l ON l.location_id = e.location_id
-            WHERE LOWER(lr.leave_type) LIKE '%no%pay%'
+            WHERE LOWER(lr.leave_type) LIKE %s
             AND lr.started_date BETWEEN %s AND %s
         """ + filter_sql + """
             GROUP BY d.department_name
-        """, tuple([total_nopay, start_resolved, end_resolved] + filter_params))
+        """, tuple([total_nopay, NO_PAY_LIKE, start_resolved, end_resolved] + filter_params))
         return cur.fetchall()
     finally:
         cur.close()
@@ -133,7 +135,7 @@ def no_pay_distribution(start: Optional[date] = Query(None), end: Optional[date]
         start_resolved, end_resolved = resolve_date_range(date_range=dateRange, start=str(start) if start else None, end=str(end) if end else None, default_days=14)
 
         filter_sql = ""
-        params = [start_resolved, end_resolved]
+        params = [NO_PAY_LIKE, start_resolved, end_resolved]
         if department and department != "All":
             filter_sql += " AND d.department_name = %s"
             params.append(department)
@@ -147,7 +149,7 @@ def no_pay_distribution(start: Optional[date] = Query(None), end: Optional[date]
             JOIN employees e ON e.employee_id=lr.employee_id
             JOIN departments d ON d.department_id=e.department_id
             LEFT JOIN locations l ON l.location_id = e.location_id
-            WHERE LOWER(lr.leave_type) LIKE '%no%pay%'
+            WHERE LOWER(lr.leave_type) LIKE %s
             AND lr.started_date BETWEEN %s AND %s
         """ + filter_sql + """
             GROUP BY d.department_name
@@ -168,7 +170,7 @@ def no_pay_details(start: Optional[date] = Query(None), end: Optional[date] = Qu
         start_resolved, end_resolved = resolve_date_range(date_range=dateRange, start=str(start) if start else None, end=str(end) if end else None, default_days=14)
 
         filter_sql = ""
-        params = [start_resolved, end_resolved]
+        params = [NO_PAY_LIKE, start_resolved, end_resolved]
         if department and department != "All":
             filter_sql += " AND d.department_name = %s"
             params.append(department)
@@ -184,7 +186,7 @@ def no_pay_details(start: Optional[date] = Query(None), end: Optional[date] = Qu
             JOIN employees e ON e.employee_id=lr.employee_id
             JOIN departments d ON d.department_id=e.department_id
             LEFT JOIN locations l ON l.location_id = e.location_id
-            WHERE LOWER(lr.leave_type) LIKE '%no%pay%'
+            WHERE LOWER(lr.leave_type) LIKE %s
             AND lr.started_date BETWEEN %s AND %s
         """ + filter_sql + """
             GROUP BY d.department_name, e.full_name
